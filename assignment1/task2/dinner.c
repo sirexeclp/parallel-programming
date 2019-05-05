@@ -12,12 +12,15 @@ typedef struct
     long feedings;
 } philosopher_t;
 
-float randomWithUpperBound(int upperBound);
 void* dine(void* philoId);
 void eat(int philoId);
 void think();
+void take(int i);
+void putDown(int i);
+void sleepRandomTimeWithUpperBound(float upperBound);
 
 int isTableReady = 0;
+int numPhilosophers = 0;
 philosopher_t * philosophers;
 pthread_mutex_t * forks;
 
@@ -28,12 +31,16 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
-    int numPhilosophers = atoi(argv[1]);
+    numPhilosophers = atoi(argv[1]);
     int runtime = atoi(argv[2]);
 
     forks = malloc(numPhilosophers * sizeof(pthread_mutex_t));
-    philosophers = malloc(numPhilosophers * sizeof(philosopher_t));
+    for (int i = 0; i < numPhilosophers; i++)
+    {
+        pthread_mutex_init(&forks[i], NULL);
+    }
 
+    philosophers = malloc(numPhilosophers * sizeof(philosopher_t));
     for (int i = 0; i < numPhilosophers; i++)
     {
         philosophers[i].feedings = 0;
@@ -80,19 +87,51 @@ void* dine(void* arg)
 
 void eat(int philoId)   
 {
+    int leftFork = philoId;
+    int rightFork = philoId + 1;
+    if (rightFork == numPhilosophers)
+    {
+        rightFork = 0;
+    }
+
+    if (philoId == 0)
+    {
+        take(leftFork);
+        take(rightFork);
+    }
+    else
+    {
+        take(rightFork);
+        take(leftFork);
+    }
+
     philosophers[philoId].feedings++;
-    sleep(randomWithUpperBound(UPPER_WAIT_TIME_EAT));
+    sleepRandomTimeWithUpperBound(UPPER_WAIT_TIME_EAT);
+
+    putDown(leftFork);
+    putDown(rightFork);
 }
 
 void think()
 {
-    sleep(randomWithUpperBound(UPPER_WAIT_TIME_THINK));
+    sleepRandomTimeWithUpperBound(UPPER_WAIT_TIME_THINK);
+}
+
+void take(int i)
+{
+    pthread_mutex_lock(&forks[i]);
+}
+
+void putDown(int i)
+{
+    pthread_mutex_unlock(&forks[i]);
 }
 
 // Helper
 
-float randomWithUpperBound(int upperBound)
+void sleepRandomTimeWithUpperBound(float upperBound)
 {
     srand(time(NULL));
-    return ((float)rand()/(float)(RAND_MAX)) * upperBound;
+    float randTime = ((float) rand() / (float) (RAND_MAX)) * upperBound;
+    sleep(randTime);
 }
