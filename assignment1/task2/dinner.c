@@ -19,6 +19,8 @@ void take(int i);
 void putDown(int i);
 void sleepRandomTimeWithUpperBound(float upperBound);
 
+void printResultsToFile(char* filename);
+
 int isTableReady = 0;
 int numPhilosophers = 0;
 philosopher_t * philosophers;
@@ -61,12 +63,7 @@ int main(int argc, char* argv[])
         pthread_cancel(philosophers[i].thread);
     }
 
-    printf("%ld", philosophers[0].feedings);
-    for(int i = 1; i < numPhilosophers; i++)
-    {
-        printf(";%ld", philosophers[i].feedings);
-    }
-    printf("\n");
+    printResultsToFile("output.txt");
 }
 
 // Philosopher methods
@@ -134,4 +131,22 @@ void sleepRandomTimeWithUpperBound(float upperBound)
     srand(time(NULL));
     float randTime = ((float) rand() / (float) (RAND_MAX)) * upperBound;
     sleep(randTime);
+}
+
+void printResultsToFile(char * filename)
+{
+    FILE *f = fopen(filename, "w");
+    if (f == NULL)
+    {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+
+    fprintf(f, "%ld", philosophers[0].feedings);
+    for(int i = 1; i < numPhilosophers; i++)
+    {
+        fprintf(f, ";%ld", philosophers[i].feedings);
+    }
+
+    fclose(f);
 }
