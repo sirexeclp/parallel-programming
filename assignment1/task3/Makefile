@@ -1,5 +1,5 @@
-heatmap: heatmap.c
-	cc -pthread $< -o $@
+heatmap: heatmap.cpp
+	g++ -lpthread $< -o $@
 
 clean:
 	rm heatmap
