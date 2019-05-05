@@ -1,11 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <math.h>
+#include <unistd.h>
 
-long long sum(long long a, long long b)
+long long *input;
+long long *output;
+int input_size;
+
+void * sum(void* args)
 {
-
+    int index = (int)args;
+    if((index* 2) +1 == input_size)
+    {
+        output[index] = input[index*2];
+        //printf("no sum here\n");
+        return;
+    }
+    output[index] = input[index*2]+input[index*2+1];
+    //printf("%lld + %lld = %lld\n", input[index*2], input[index*2+1], output[index]);
 }
 
 int main(int argc, char* argv[])
@@ -17,52 +29,51 @@ int main(int argc, char* argv[])
     }
     
     int numThreads = atoi(argv[1]);
-    long long start = atoi(argv[2]);
-    long long end = atoi(argv[3]);
+    long long start = atoll(argv[2]);
+    long long end = atoll(argv[3]);
+    //printf("Summing from %lld to %lld with %d threads.\n", start, end, numThreads);
 
-    int threads = malloc(sizeof(int) * numThreads);
-    int input_size = end - start;
-    int output_size = input_size/2;
-    long long input = malloc(size(long long ) * input_size);
-    long long output = malloc(size(long long ) * output_size);
-
-    int threads2Spawn = min(numThreads, output_size);
-    while (output_size > 1)
+    pthread_t *threads = malloc(sizeof(pthread_t) * numThreads);
+    input_size = (end - start)+1;
+    int output_size = input_size/2 + (input_size % 2 != 0);
+    input = malloc(sizeof(long long) * input_size);
+    output = malloc(sizeof(long long) * output_size);
+    int sum_index = 0;
+    int threads2Spawn = numThreads;
+    for(int i = 0; i < input_size; i++)
     {
-        for (int i; i < threads2Spawn; i++)
-        {
-            /* create a second thread which executes inc_x(&x) */
-            if(pthread_create(&threads[i], NULL, inc_x, &x)) {
-
-            fprintf(stderr, "Error creating thread\n");
-            return 1;
-
+        input[i] = start+i;
+    }
+    while (input_size != 1)
+    {
+        //printf("input: %d\n", input_size);
+        //printf("output: %d\n\n", output_size);
+        sum_index = 0;
+        while(sum_index< output_size){
+            int actual_threads = 0;  
+            for (int i=0; i < threads2Spawn && (sum_index < output_size); i++)
+            {
+                /* create a second thread which executes inc_x(&x) */
+                if(pthread_create(&threads[i], NULL, sum, (void *) sum_index)) {
+                    //printf(stderr, "Error creating thread\n");
+                    return 1;
+                }
+                sum_index  ++;
+                actual_threads ++;
             }
-        }
+            for (int i=0; i < actual_threads; i++)
+            {
+                /* create a second thread which executes inc_x(&x) */
+                pthread_join(threads[i],NULL);
+            }
+         }
+        memcpy((void*)input, (void*)output, sizeof(long long) * output_size);
         input_size = output_size;
-        output_size = input_size/2;
-        memcpy(input,output,size(long long) * output_size);
+        output_size = input_size/2 + (input_size % 2 != 0);
     }
-
-
-
-
-    /* increment y to 100 in the first thread */
-    while(++y < 100);
-
-    printf("y increment finished\n");
-
-    /* wait for the second thread to finish */
-    if(pthread_join(inc_x_thread, NULL)) {
-
-    fprintf(stderr, "Error joining thread\n");
-    return 2;
-
-    }
-
-    if(output_size == 1)
-    {
-        printf("%lld",output[0]);
-    }
-    printf("%d %lld %lld", numThreads, start, end);
-}
+    printf("%lld", output[0]);
+   
+    free(input);
+    free(output);
+    free(threads);
+ }
