@@ -1,2 +1,2 @@
 parsum: parsum.c
-	cc task1/parsum.c -o $@
+	cc -pthread parsum.c -o $@
