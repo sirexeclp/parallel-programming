@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
 
 // Philosopher methods
 
-void *dine(void* arg)
+void* dine(void* arg)
 {
     int philoId = (int) arg;
 
