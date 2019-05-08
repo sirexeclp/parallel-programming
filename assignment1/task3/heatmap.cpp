@@ -83,6 +83,12 @@ struct Hotspot
 
 };
 
+struct WorkPack
+{
+    Map *map;
+    int row;
+};
+
 
 void update_cell(Map &map,int x,int y)
 {
@@ -93,6 +99,19 @@ void update_cell(Map &map,int x,int y)
 
     map.cells[x + y * map.width] = acc / 9.;
 }
+void update_row(Map &map, int y)
+{
+    for(int x = 0; x < map.width; x++ )
+    {
+        update_cell(map, x, y);
+    }
+}
+void *run_thread(void * data)
+{
+    WorkPack *wp = (WorkPack*) data;
+    update_row(*(wp->map), wp->row);
+}
+
 
 std::vector<Hotspot> read_input(std::string file_name)
 {
@@ -131,6 +150,10 @@ int main(int argc, char* argv[])
         std::cout << "x "<< item.x << " y " << item.y  << " start "<< item.start_round <<" end "<< item.end_round << "\n";
     }*/
 
+    int numThreads = map.height;
+    pthread_t *threads = new pthread_t[numThreads];
+    WorkPack *wp = new WorkPack[numThreads];
+
     for(auto hotSpot: hotSpots)
         if(hotSpot.start_round == 0)
             map.cells[hotSpot.y * map.width + hotSpot.x] = 1;
@@ -138,8 +161,16 @@ int main(int argc, char* argv[])
     for(int round=0; round < rounds; round++)
     {
         for(int j = 0; j< map.height; j++)
-            for (int i = 0; i < map.width; i++)
-                update_cell(map, i, j);
+        {
+            wp[j].map = &map;
+            wp[j].row = j;
+            pthread_create(&threads[j], NULL, &run_thread,(void*)&wp[j]);
+        }
+
+        for(int j = 0; j< map.height; j++)
+        {
+            pthread_join(threads[j],NULL);
+        }
 
         for(auto hotSpot: hotSpots)
             if((round >= hotSpot.start_round) && (round < hotSpot.end_round ))
