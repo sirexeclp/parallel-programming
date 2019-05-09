@@ -3,8 +3,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define UPPER_WAIT_TIME_EAT 1.5
-#define UPPER_WAIT_TIME_THINK 1.5
+#define UPPER_WAIT_TIME_EAT 5000
+#define UPPER_WAIT_TIME_THINK 50000
 
 typedef struct
 {
@@ -130,7 +130,7 @@ void sleepRandomTimeWithUpperBound(float upperBound)
 {
     srand(time(NULL));
     float randTime = ((float) rand() / (float) (RAND_MAX)) * upperBound;
-    sleep(randTime);
+    for(int i=0; i< randTime; i++);
 }
 
 void printResultsToFile(char * filename)
