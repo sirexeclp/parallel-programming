@@ -105,16 +105,17 @@ struct WorkPack
 
 void update_cell(Map &map_aggregated, Map &map_temp, int x, int y)
 {
+    auto offset = map_aggregated.width;
     double acc = 0;
-    for (int i = std::max(x-1, 0); i < std::min(x+2, map_aggregated.width); i++)
+    for (int i = std::max(x-1, 0); i < std::min(x+2, offset); i++)
     {
         for (int j = std::max(y-1, 0); j < std::min(y+2, map_aggregated.height); j++)
         {
-            acc += map_aggregated.cells[j * map_aggregated.width + i];
+            acc += map_aggregated.cells[j * offset + i];
         }
     }
 
-    map_temp.cells[x + y * map_temp.width] = acc / 9.;
+    map_temp.cells[x + y * offset] = acc / 9.;
 }
 
 void update_row(Map &map_aggregated, Map &map_temp, int y)
