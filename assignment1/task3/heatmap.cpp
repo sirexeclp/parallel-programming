@@ -9,6 +9,8 @@
 #include <pthread.h>
 #include <fstream>
 
+#define OUTPUT_NAME "output.txt"
+
 class Map{
     public:
         double *cells;
@@ -32,7 +34,7 @@ class Map{
 
         void print()
         {
-            std::ofstream output("output.txt");
+            std::ofstream output(OUTPUT_NAME);
             for(int j = 0; j < height; j++) {
                 for (int i = 0; i < width; i++) {
                     auto value = cells[j*width+i];
@@ -51,7 +53,7 @@ class Map{
         void print(std::string coordinateFile)
         {
             std::ifstream file(coordinateFile);
-            std::ofstream output("output.txt");
+            std::ofstream output(OUTPUT_NAME);
             std::string line;
             //throw away the header
             std::getline(file, line);
