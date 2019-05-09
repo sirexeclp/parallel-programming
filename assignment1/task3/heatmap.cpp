@@ -10,10 +10,11 @@
 #include <fstream>
 
 #define OUTPUT_NAME "output.txt"
+#define CELL_T double
 
 class Map {
     public:
-        double *cells;
+        CELL_T *cells;
         int width;
         int height;
 
@@ -21,13 +22,26 @@ class Map {
         {
             this->height = height;
             this->width = width;
-            this->cells = new double [height * width];
+            this->cells = new CELL_T [height * width];
 
             for (int j = 0; j < height; j++)
             {
                 for (int i = 0; i < width; i++)
                 {
                     cells[j * width + i] = 0;
+                }
+            }
+        }
+        Map(const Map& old)
+        {
+            this->height = old.height;
+            this->width  = old.width;
+            this->cells = new CELL_T [height * width];
+             for (int j = 0; j < height; j++)
+            {
+                for (int i = 0; i < width; i++)
+                {
+                    cells[j * width + i] = old.cells[j * width + i];
                 }
             }
         }
@@ -54,7 +68,7 @@ class Map {
                         output << ((int) value) % 10;
                     }
                 }
-                output << "\n";
+                output << std::endl;
             }
         }
 
@@ -218,6 +232,8 @@ int main(int argc, char* argv[])
     {
         map_aggregated->print();
     }
+    
+    delete map_aggregated;
 
     return EXIT_SUCCESS;
  }
