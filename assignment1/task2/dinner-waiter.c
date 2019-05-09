@@ -19,6 +19,7 @@ int isTableReady = 0;
 int numPhilosophers = 0;
 pthread_t * philosophers;
 pthread_mutex_t * forks;
+pthread_mutex_t waiter;
 
 int main(int argc, char* argv[])
 {
@@ -35,6 +36,8 @@ int main(int argc, char* argv[])
     {
         pthread_mutex_init(&forks[i], NULL);
     }
+
+    pthread_mutex_init(&waiter, NULL);
 
     philosophers = malloc(numPhilosophers * sizeof(pthread_t));
     for (int i = 0; i < numPhilosophers; i++)
@@ -90,21 +93,17 @@ void eat(int philoId)
         rightFork = 0;
     }
 
-    if (philoId == 0)
-    {
-        take(leftFork);
-        take(rightFork);
-    }
-    else
-    {
-        take(rightFork);
-        take(leftFork);
-    }
+    pthread_mutex_lock(&waiter);
+
+    take(leftFork);
+    take(rightFork);
+
+    pthread_mutex_unlock(&waiter);
 
     sleepRandomTimeWithUpperBound(UPPER_WAIT_TIME_EAT);
 
-    putDown(leftFork);
     putDown(rightFork);
+    putDown(leftFork);
 }
 
 void think()
