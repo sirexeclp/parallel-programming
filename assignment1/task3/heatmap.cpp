@@ -212,6 +212,7 @@ int main(int argc, char* argv[])
             pthread_join(threads[j], NULL);
         }
 
+        delete map_aggregated;
         map_aggregated = map_temp;
     }
 
