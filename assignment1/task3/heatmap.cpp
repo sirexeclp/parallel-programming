@@ -10,10 +10,11 @@
 #include <fstream>
 
 #define OUTPUT_NAME "output.txt"
+#define CELL_T double
 
 class Map {
     public:
-        double *cells;
+        CELL_T *cells;
         int width;
         int height;
 
@@ -21,13 +22,26 @@ class Map {
         {
             this->height = height;
             this->width = width;
-            this->cells = new double [height * width];
+            this->cells = new CELL_T [height * width];
 
             for (int j = 0; j < height; j++)
             {
                 for (int i = 0; i < width; i++)
                 {
                     cells[j * width + i] = 0;
+                }
+            }
+        }
+        Map(const Map& old)
+        {
+            this->height = old.height;
+            this->width  = old.width;
+            this->cells = new CELL_T [height * width];
+             for (int j = 0; j < height; j++)
+            {
+                for (int i = 0; i < width; i++)
+                {
+                    cells[j * width + i] = old.cells[j * width + i];
                 }
             }
         }
@@ -106,7 +120,7 @@ struct WorkPack
 void update_cell(Map &map_aggregated, Map &map_temp, int x, int y)
 {
     auto offset = map_aggregated.width;
-    double acc = 0;
+    CELL_T acc = 0;
     for (int i = std::max(x-1, 0); i < std::min(x+2, offset); i++)
     {
         for (int j = std::max(y-1, 0); j < std::min(y+2, map_aggregated.height); j++)
@@ -162,12 +176,12 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    Map map_aggregated(atoi(argv[1]), atoi(argv[2]));
-    Map map_temp(atoi(argv[1]), atoi(argv[2]));
+    Map *map_aggregated = new Map(atoi(argv[1]), atoi(argv[2]));
+    Map *map_temp = new Map(atoi(argv[1]), atoi(argv[2]));
     int rounds = atoi(argv[3]);
     char * input_file = argv[4];
 
-    int numThreads = map_aggregated.height;
+    int numThreads = map_aggregated->height;
     pthread_t *threads = new pthread_t[numThreads];
     WorkPack *wp = new WorkPack[numThreads];
 
@@ -176,7 +190,7 @@ int main(int argc, char* argv[])
     {
         if (hotSpot.start_round == 0)
         {
-            map_aggregated.cells[hotSpot.y * map_aggregated.width + hotSpot.x] = 1;
+            map_aggregated->cells[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
         }
     }
 
@@ -184,8 +198,8 @@ int main(int argc, char* argv[])
     {
         for (int j = 0; j < numThreads; j++)
         {
-            wp[j].map_aggregated = &map_aggregated;
-            wp[j].map_temp = &map_temp;
+            wp[j].map_aggregated = map_aggregated;
+            wp[j].map_temp = map_temp;
             wp[j].row = j;
             pthread_create(&threads[j], NULL, &run_thread, (void*) &wp[j]);
         }
@@ -199,22 +213,24 @@ int main(int argc, char* argv[])
         {
             if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
             {
-                map_temp.cells[hotSpot.y * map_temp.width + hotSpot.x] = 1;
+                map_temp->cells[hotSpot.y * map_temp->width + hotSpot.x] = 1;
             }
         }
-
-        map_aggregated = map_temp;
+        delete map_aggregated;
+        map_aggregated = new Map(*map_temp);
     }
 
     if (argc == 6)
     {
         auto coordinateFile = argv[5];
-        map_aggregated.print(coordinateFile);
+        map_aggregated->print(coordinateFile);
     }
     else
     {
-        map_aggregated.print();
+        map_aggregated->print();
     }
+    delete map_aggregated;
+    delete map_temp;
 
     return EXIT_SUCCESS;
  }
