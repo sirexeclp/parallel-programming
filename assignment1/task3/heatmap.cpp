@@ -24,10 +24,12 @@ class Map {
             this->cells = new double [height * width];
 
             for (int j = 0; j < height; j++)
+            {
                 for (int i = 0; i < width; i++)
                 {
                     cells[j * width + i] = 0;
                 }
+            }
         }
 
         virtual ~Map()
@@ -95,37 +97,38 @@ struct Hotspot
 
 struct WorkPack
 {
-    Map *map;
+    Map *map_aggregated;
+    Map *map_temp;
     int row;
 };
 
 
-void update_cell(Map &map, int x, int y)
+void update_cell(Map &map_aggregated, Map &map_temp, int x, int y)
 {
     double acc = 0;
-    for (int i = std::max(x-1, 0); i < std::min(x+2, map.width); i++)
+    for (int i = std::max(x-1, 0); i < std::min(x+2, map_aggregated.width); i++)
     {
-        for (int j = std::max(y-1, 0); j < std::min(y+2, map.height); j++)
+        for (int j = std::max(y-1, 0); j < std::min(y+2, map_aggregated.height); j++)
         {
-            acc += map.cells[j*map.width + i];
+            acc += map_aggregated.cells[j * map_aggregated.width + i];
         }
     }
 
-    map.cells[x + y * map.width] = acc / 9.;
+    map_temp.cells[x + y * map_temp.width] = acc / 9.;
 }
 
-void update_row(Map &map, int y)
+void update_row(Map &map_aggregated, Map &map_temp, int y)
 {
-    for (int x = 0; x < map.width; x++)
+    for (int x = 0; x < map_aggregated.width; x++)
     {
-        update_cell(map, x, y);
+        update_cell(map_aggregated, map_temp, x, y);
     }
 }
 
 void *run_thread(void * data)
 {
     WorkPack *wp = (WorkPack*) data;
-    update_row(*(wp->map), wp->row);
+    update_row(*(wp->map_aggregated), *(wp->map_temp), wp->row);
 }
 
 
@@ -158,34 +161,35 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    Map map(atoi(argv[1]), atoi(argv[2]));
+    Map map_aggregated(atoi(argv[1]), atoi(argv[2]));
+    Map map_temp(atoi(argv[1]), atoi(argv[2]));
     int rounds = atoi(argv[3]);
     char * input_file = argv[4];
 
-    auto hotSpots = read_input(input_file);
-
-    int numThreads = map.height;
+    int numThreads = map_aggregated.height;
     pthread_t *threads = new pthread_t[numThreads];
     WorkPack *wp = new WorkPack[numThreads];
 
+    auto hotSpots = read_input(input_file);
     for (auto hotSpot: hotSpots)
     {
         if (hotSpot.start_round == 0)
         {
-            map.cells[hotSpot.y * map.width + hotSpot.x] = 1;
+            map_aggregated.cells[hotSpot.y * map_aggregated.width + hotSpot.x] = 1;
         }
     }
 
     for (int round = 0; round < rounds; round++)
     {
-        for (int j = 0; j < map.height; j++)
+        for (int j = 0; j < numThreads; j++)
         {
-            wp[j].map = &map;
+            wp[j].map_aggregated = &map_aggregated;
+            wp[j].map_temp = &map_temp;
             wp[j].row = j;
             pthread_create(&threads[j], NULL, &run_thread, (void*) &wp[j]);
         }
 
-        for (int j = 0; j< map.height; j++)
+        for (int j = 0; j < numThreads; j++)
         {
             pthread_join(threads[j], NULL);
         }
@@ -194,19 +198,21 @@ int main(int argc, char* argv[])
         {
             if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
             {
-                map.cells[hotSpot.y * map.width + hotSpot.x] = 1;
+                map_temp.cells[hotSpot.y * map_temp.width + hotSpot.x] = 1;
             }
         }
+
+        map_aggregated = map_temp;
     }
 
     if (argc == 6)
     {
         auto coordinateFile = argv[5];
-        map.print(coordinateFile);
+        map_aggregated.print(coordinateFile);
     }
     else
     {
-        map.print();
+        map_aggregated.print();
     }
 
     return EXIT_SUCCESS;
