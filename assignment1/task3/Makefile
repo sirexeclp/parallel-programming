@@ -1,7 +1,7 @@
 all: heatmap
 
 heatmap: heatmap.cpp
-	g++ -lpthread $< -o $@
+	g++ -pthread $< -o $@
 
 validate: heatmap
 	python3 validator.py;exit=$$?; echo "Validation exited with code $$exit"; if [ $$exit -eq 0 ]; then echo "OK"; else echo "Validation failed!"; fi;
