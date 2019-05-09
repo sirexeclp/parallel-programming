@@ -73,7 +73,7 @@ class Map {
                 int x, y;
                 std::stringstream lineStream(line);
                 lineStream >> x >> y;
-                output << cells[x+y*width] << "\n";
+                output << cells[x + y * width] << std::endl;
             }
 
         }
@@ -97,30 +97,30 @@ struct Hotspot
 
 struct WorkPack
 {
-    Map *map_aggregated;
-    Map *map_temp;
+    Map * map_aggregated;
+    Map * map_temp;
     int row;
 };
 
 
-void update_cell(Map &map_aggregated, Map &map_temp, int x, int y)
+void update_cell(Map * map_aggregated, Map * map_temp, int x, int y)
 {
-    auto offset = map_aggregated.width;
+    auto offset = map_aggregated->width;
     double acc = 0;
     for (int i = std::max(x-1, 0); i < std::min(x+2, offset); i++)
     {
-        for (int j = std::max(y-1, 0); j < std::min(y+2, map_aggregated.height); j++)
+        for (int j = std::max(y-1, 0); j < std::min(y+2, map_aggregated->height); j++)
         {
-            acc += map_aggregated.cells[j * offset + i];
+            acc += (map_aggregated->cells)[j * offset + i];
         }
     }
 
-    map_temp.cells[x + y * offset] = acc / 9.;
+    (map_temp->cells)[x + y * offset] = acc / 9.;
 }
 
-void update_row(Map &map_aggregated, Map &map_temp, int y)
+void update_row(Map * map_aggregated, Map * map_temp, int y)
 {
-    for (int x = 0; x < map_aggregated.width; x++)
+    for (int x = 0; x < map_aggregated->width; x++)
     {
         update_cell(map_aggregated, map_temp, x, y);
     }
@@ -129,7 +129,7 @@ void update_row(Map &map_aggregated, Map &map_temp, int y)
 void *run_thread(void * data)
 {
     WorkPack *wp = (WorkPack*) data;
-    update_row(*(wp->map_aggregated), *(wp->map_temp), wp->row);
+    update_row(wp->map_aggregated, wp->map_temp, wp->row);
 }
 
 
@@ -162,30 +162,33 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    Map map_aggregated(atoi(argv[1]), atoi(argv[2]));
-    Map map_temp(atoi(argv[1]), atoi(argv[2]));
+    Map * map_aggregated = new Map(atoi(argv[1]), atoi(argv[2]));
+    
     int rounds = atoi(argv[3]);
     char * input_file = argv[4];
 
-    int numThreads = map_aggregated.height;
+    int numThreads = map_aggregated->height;
     pthread_t *threads = new pthread_t[numThreads];
     WorkPack *wp = new WorkPack[numThreads];
 
     auto hotSpots = read_input(input_file);
-    for (auto hotSpot: hotSpots)
-    {
-        if (hotSpot.start_round == 0)
-        {
-            map_aggregated.cells[hotSpot.y * map_aggregated.width + hotSpot.x] = 1;
-        }
-    }
 
     for (int round = 0; round < rounds; round++)
     {
+        Map * map_temp = new Map(atoi(argv[1]), atoi(argv[2]));
+
+        for (auto hotSpot: hotSpots)
+        {
+            if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
+            {
+                (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
+            }
+        }
+
         for (int j = 0; j < numThreads; j++)
         {
-            wp[j].map_aggregated = &map_aggregated;
-            wp[j].map_temp = &map_temp;
+            wp[j].map_aggregated = map_aggregated;
+            wp[j].map_temp = map_temp;
             wp[j].row = j;
             pthread_create(&threads[j], NULL, &run_thread, (void*) &wp[j]);
         }
@@ -195,25 +198,25 @@ int main(int argc, char* argv[])
             pthread_join(threads[j], NULL);
         }
 
-        for (auto hotSpot: hotSpots)
-        {
-            if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
-            {
-                map_temp.cells[hotSpot.y * map_temp.width + hotSpot.x] = 1;
-            }
-        }
-
         map_aggregated = map_temp;
+    }
+
+    for (auto hotSpot: hotSpots)
+    {
+        if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
+        {
+            (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
+        }
     }
 
     if (argc == 6)
     {
         auto coordinateFile = argv[5];
-        map_aggregated.print(coordinateFile);
+        map_aggregated->print(coordinateFile);
     }
     else
     {
-        map_aggregated.print();
+        map_aggregated->print();
     }
 
     return EXIT_SUCCESS;
