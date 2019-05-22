@@ -1,7 +1,7 @@
 all: decrypt
 
-decrypt: decrypt.c
-	cc ./decrypt.c -o $@
+decrypt: decrypt.cpp
+	g++ $< -o $@
 
 clean:
 	rm decrypt
