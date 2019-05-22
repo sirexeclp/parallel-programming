@@ -3,6 +3,9 @@
 #include <iostream>
 #include <vector>
 
+#define delimiter ":"
+#define lengthSalt 2
+
 struct UserTask
 {
     std::string username;
@@ -10,12 +13,35 @@ struct UserTask
     std::string hash;
 };
 
+void readPasswordFile(const std::string passwdFilepath, std::vector<UserTask> * tasks) {
+    std::ifstream passwdFile(passwdFilepath);
+    std::string userLine = "";
+
+    while (passwdFile >> userLine)
+    {
+        auto posDeliminator = userLine.find(delimiter);
+        
+        UserTask task = UserTask();
+        task.username = userLine.substr(0, posDeliminator);
+        task.salt = userLine.substr(posDeliminator + 1, lengthSalt);
+        task.hash = userLine.substr(posDeliminator + 1 + lengthSalt, userLine.length() - task.username.length() - lengthSalt);
+
+        tasks->push_back(task);
+    }
+}
+
+void readDictFile(const std::string dictFilepath, std::vector<std::string> * dictPasswords) {
+    std::ifstream dictFile(dictFilepath);
+    std::string entry = "";
+
+    while (dictFile >> entry)
+    {
+        dictPasswords->push_back(entry);
+    }
+}
 
 int main(int argc, char const *argv[])
 {
-    const auto delimiter = ":";
-    const auto lengthSalt = 2;
-
     if (argc != 3)
     {
         std::cerr << "[Error] Usage: " << argv[0] << " password-filepath dictionary-filepath" << std::endl;
@@ -25,22 +51,13 @@ int main(int argc, char const *argv[])
     const auto dictFilepath = argv[2];
 
     std::vector<UserTask> tasks;
+    std::vector<std::string> dictPasswords;
 
-    std::ifstream passwdFile(passwdFilepath);
-    std::string line = "";
-    while (passwdFile >> line)
-    {
-        UserTask task = UserTask();
-        auto posDeliminator = line.find(delimiter);
-        task.username = line.substr(0, posDeliminator);
-        task.salt = line.substr(posDeliminator + 1, lengthSalt);
-        task.hash = line.substr(posDeliminator + 1 + lengthSalt, line.length() - task.username.length() - lengthSalt);
-
-        tasks.push_back(task);
-    }
+    readPasswordFile(passwdFilepath, &tasks);
+    readDictFile(dictFilepath, &dictPasswords);
 
     for (UserTask task: tasks) {
-        std::cout << task.username << " " << task.salt << " " << task.hash << std::endl;
+        std::cout << task.username << std::endl;
     }
 
     return 0;
