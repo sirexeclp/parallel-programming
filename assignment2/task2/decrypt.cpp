@@ -16,6 +16,12 @@ struct UserTask
     std::string password;
 };
 
+struct Result
+{
+    bool found = false;
+    UserTask task;
+};
+
 void readPasswordFile(const std::string passwdFilepath, std::vector<UserTask> &tasks)
 {
     std::ifstream passwdFile(passwdFilepath);
@@ -61,27 +67,31 @@ int main(int argc, char const *argv[])
     readPasswordFile(passwdFilepath, tasks);
     readDictFile(dictFilepath, dictPasswords);
 
-    bool firstFound = false;
-    bool secondFound = false;
-    UserTask t1;
-    UserTask t2;
+    Result result1 = Result();
+    Result result2 = Result();
 
-    #pragma omp parallel
-    for (auto task : tasks)
+    #pragma omp parallel for shared(result1, result2)
+    for (int i = 0; i < tasks.size(); i++)
     {
+        auto task = tasks[i];
         auto salt = task.salt.c_str();
         auto hash = task.hash.c_str();
 
-        for (auto password : dictPasswords)
+        if (result1.found && result2.found) continue;
+
+        for (int j = 0; j < dictPasswords.size(); j++)
         {
+            auto password = dictPasswords[j];
             struct crypt_data data;
             data.initialized = 0;
+
+            if (result1.found && result2.found) continue;
 
             if (strcmp(crypt_r(password.c_str(), salt, &data), hash) == 0)
             {
                 task.password = password;
-                t1 = task;
-                firstFound = true;
+                result1.found = true;
+                result1.task = task;
                 break;
             }
 
@@ -91,8 +101,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "0").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "0";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -101,8 +111,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "1").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "1";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -111,8 +121,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "2").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "2";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -121,8 +131,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "3").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "3";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -131,8 +141,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "4").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "4";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -141,8 +151,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "5").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "5";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -151,8 +161,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "6").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "6";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -161,8 +171,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "7").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "7";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -171,8 +181,8 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "8").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "8";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
 
@@ -181,26 +191,16 @@ int main(int argc, char const *argv[])
                 if (strcmp(crypt_r((password + "9").c_str(), salt, &data), hash) == 0)
                 {
                     task.password = password + "9";
-                    t2 = task;
-                    secondFound = true;
+                    result2.found = true;
+                    result2.task = task;
                     break;
                 }
             }
-
-            if (firstFound && secondFound)
-            {
-                break;
-            }
-        }
-
-        if (firstFound && secondFound)
-        {
-            break;
         }
     }
 
-    std::cout << t1.username << ";" << t1.password << std::endl;
-    std::cout << t2.username << ";" << t2.password << std::endl;
+    std::cout << result1.task.username << ";" << result1.task.password << std::endl;
+    std::cout << result2.task.username << ";" << result2.task.password << std::endl;
 
     return 0;
 }
