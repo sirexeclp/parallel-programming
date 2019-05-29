@@ -1,7 +1,7 @@
 all: parsum
 
 parsum: parsum.c
-	cc -pthread parsum.c -o $@
+	cc -pthread parsum.c -O3 -o $@
 
 validate: parsum
 	python3 validator.py;exit=$$?; echo "Validation exited with code $$exit"; if [ $$exit -eq 0 ]; then echo "OK"; else echo "Validation failed!"; fi;
