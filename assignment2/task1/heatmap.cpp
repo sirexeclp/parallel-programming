@@ -32,6 +32,7 @@ class Map {
                 }
             }
         }
+        
         Map(const Map& old)
         {
             this->height = old.height;
@@ -134,6 +135,7 @@ void update_cell(Map * map_aggregated, Map * map_temp, int x, int y)
 
 void update_row(Map * map_aggregated, Map * map_temp, int y)
 {
+    #pragma omp parallel for
     for (int x = 0; x < map_aggregated->width; x++)
     {
         update_cell(map_aggregated, map_temp, x, y);
@@ -183,14 +185,17 @@ int main(int argc, char* argv[])
     {
         Map * map_temp = new Map(atoi(argv[1]), atoi(argv[2]));
 
-        for (auto hotSpot: hotSpots)
+        #pragma omp parallel for
+        for (int j = 0; j < hotSpots.size(); j++)
         {
+            auto hotSpot = hotSpots[j];
             if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
             {
                 (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
             }
         }
-        #pragma parallel for
+
+        #pragma omp parallel for
         for (int j = 0; j < rows; j++)
         {
             update_row(map_aggregated,map_temp,j);
@@ -200,8 +205,10 @@ int main(int argc, char* argv[])
         map_aggregated = map_temp;
     }
 
-    for (auto hotSpot: hotSpots)
+    #pragma omp parallel for
+    for (int j = 0; j < hotSpots.size(); j++)
     {
+        auto hotSpot = hotSpots[j];
         if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
         {
             (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
