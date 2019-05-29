@@ -56,6 +56,7 @@ int main(int argc, char const *argv[])
     if (argc != 3)
     {
         std::cerr << "[Error] Usage: " << argv[0] << " password-filepath dictionary-filepath" << std::endl;
+        exit(1);
     }
 
     const auto passwdFilepath = argv[1];
