@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string.h>
 #include <algorithm> 
+#include <omp.h>
 
 #define INPUT_SIZE 64 // 512bit /8 bits/byte
 
@@ -41,22 +42,28 @@ std::vector<unsigned char> increment(std::vector<unsigned char> input)
 std::vector<unsigned char> add(std::vector<unsigned char> input, int b)
 {
     bool overflow = false;
-    for(int i =sizeof(int)-1; i>=0; i--)
+    int v_pos =0;
+    for(int i =0; i< sizeof(int); i++)
     {
         unsigned char sum = b >> (8*i);
+        if(overflow)
+        {
+            input[v_pos] += 1;
+            overflow = false;
+        }
         if(sum==0)
             continue;
-        int v_pos = input.size()-((sizeof(int)-1)-i);
+        v_pos = (input.size()-1) - i;
        // std::cout<<v_pos<<"\n";
         input[v_pos] += sum;
-        if(overflow)
-            input[v_pos] += 1;
+
         if(input[v_pos] == 0)
             overflow = true;
-        else 
-            overflow = false;
 
     }
+    if(overflow)
+        input[v_pos-1] += 1;
+
     return input;
 }
 std::vector<unsigned char> pad_zeros(std::vector<unsigned char> input, int target_length)
@@ -81,7 +88,8 @@ void print_vec(std::vector<unsigned char> input)
 const bool less( std::vector<unsigned char> &a, std::vector<unsigned char> &b)
 {
     for(int i =0; i< a.size(); i++)
-     {   if(a[i] > b[i])
+     {   
+        if(a[i] > b[i])
             return false;
         if(a[i] < b[i])
             return true;
@@ -103,43 +111,74 @@ int main(int argc, char * argv[])
         indices.push_back(atoi(argv[i]));
     }
     std::istringstream hex_chars_stream(input);
-    unsigned int c;
-    while (hex_chars_stream >> std::hex >> c)
+    unsigned char c;
+    for (int i; i < strlen(input) ; i+=2)
     {
-        if(c>>24 != 0)
-            parsed_input.push_back(c>>24);
-        if(c>>16 != 0)
-        parsed_input.push_back(c>>16);
-        if(c>>8 != 0)
-        parsed_input.push_back(c>>8);
-        if(c != 0)
-        parsed_input.push_back(c);
+        char c1 = input[i];
+        char c2 = input[i+1];
+        unsigned char result = 0;
+        if(c1>='0' && c1 <= '9')
+            result += 16 * (c1 - '0');
+        if(c1>='a' && c1 <= 'f')
+            result += 16 * (c1 - 'a' + 10);
+
+        if(c2>='0' && c2 <= '9')
+            result += (c2 - '0');
+        if(c2>='a' && c2 <= 'f')
+            result += (c2 - 'a' + 10);    
+        parsed_input.push_back(result);          
     }
     
+    // print_md5_sum(parsed_input);
     parsed_input = pad_zeros(parsed_input, INPUT_SIZE);
-     //print_vec(parsed_input);
 
     std::vector<std::vector<unsigned char>> hashes; 
-    //#pragma omp parallel for shared(hashes)
-    for(int i = 0; i < blocks; i++)
+    
+    int work_block_size = blocks / omp_get_max_threads();
+
+    std::cout << "wb:" << work_block_size<< "\n";
+    // #pragma omp declare reduction (merge : std::vector<std::vector<unsigned char>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+
+    #pragma omp parallel
     {
-        //print_vec(parsed_input);
-    //    auto hash_in = add(parsed_input,i);
-        auto hash_result = md5_wrap(parsed_input);  
-        hashes.push_back(hash_result);
-      // print_md5_sum(hash_result);
-     
-     // print_vec(hash_result);
-      
-         parsed_input = increment(parsed_input);
+        std::vector<std::vector<unsigned char>> local_hashes; 
+        // std::cout << work_block_size * omp_get_thread_num()<< "--" <<std::min(work_block_size * (omp_get_thread_num()+1),blocks) << std::endl;
+        int start = work_block_size * omp_get_thread_num();
+        int end = std::min(start + work_block_size ,blocks);
+        int i = start;
+        #pragma omp for private(i)
+        for( i = start; i < end; i++)
+        {
+            //print_vec(parsed_input);
+            auto hash_in = add(parsed_input,i);
+            auto hash_result = md5_wrap(hash_in);
+            
+            local_hashes.push_back(hash_result);
+            // print_md5_sum(hash_result);
+            
+            // print_vec(hash_result);
+            
+            // parsed_input = increment(parsed_input);
+        }
+        std::cout <<"size:" <<local_hashes.size() << "\n";
+        #pragma omp critical
+        hashes.insert(hashes.end(),local_hashes.begin(),local_hashes.end());
     }
+    #pragma omp barrier
+    // print_md5_sum(parsed_input);
 
-
+    std::cout <<"size:" <<hashes.size() << "\n";
     std::sort(hashes.begin(),hashes.end(),less);
     for(auto i:indices)
     {
         print_md5_sum(hashes[i]);
     }
+    // for(auto i:hashes)
+    // {
+    //     print_md5_sum(i);
+    // }
+
+    // std::cout << (char (255 +1)) << "\n";
 //     print_md5_sum(hashes[0]);
 // // print_md5_sum(hashes[1]);
 //     print_md5_sum(hashes[2]);
