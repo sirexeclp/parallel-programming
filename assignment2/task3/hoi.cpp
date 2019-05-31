@@ -11,7 +11,6 @@
 #include <iostream>
 #include <string.h>
 #include <algorithm> 
-#include <omp.h>
 
 #define INPUT_SIZE 64 // 512bit /8 bits/byte
 
@@ -97,21 +96,9 @@ const bool less( std::vector<unsigned char> &a, std::vector<unsigned char> &b)
     return false;
 }
 
-
-int main(int argc, char * argv[])
+std::vector<unsigned char> parse_hex_string(char * input)
 {
-    unsigned char result[MD5_DIGEST_LENGTH];
-   
-    std::vector<unsigned char> parsed_input;//512/8
-    std::vector<int> indices ;
-    auto input =argv[1];
-    int blocks = atoi(argv[2]);
-    for(int i = 3;i<argc;i++)
-    {
-        indices.push_back(atoi(argv[i]));
-    }
-    std::istringstream hex_chars_stream(input);
-    unsigned char c;
+    std::vector<unsigned char> parsed_input;
     for (int i; i < strlen(input) ; i+=2)
     {
         char c1 = input[i];
@@ -128,66 +115,44 @@ int main(int argc, char * argv[])
             result += (c2 - 'a' + 10);    
         parsed_input.push_back(result);          
     }
+    return parsed_input;
+}
+
+
+int main(int argc, char * argv[])
+{       
+    if(argc < 4)
+    {
+        std::cout << "use: ./hoi hex-prefix number-of-blocks block-ids ..." << "\n";
+        return EXIT_FAILURE;
+    }
     
-    // print_md5_sum(parsed_input);
-    parsed_input = pad_zeros(parsed_input, INPUT_SIZE);
+    auto input =argv[1];
+    auto parsed_input = pad_zeros(parse_hex_string(input), INPUT_SIZE);
+
+    int blocks = atoi(argv[2]);
+    std::vector<int> indices ;
+    for(int i = 3;i<argc;i++)
+    {
+        indices.push_back(atoi(argv[i]));
+    }
 
     std::vector<std::vector<unsigned char>> hashes; 
     
-    int work_block_size = blocks / omp_get_max_threads();
-
-    std::cout << "wb:" << work_block_size<< "\n";
-    // #pragma omp declare reduction (merge : std::vector<std::vector<unsigned char>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-
-    #pragma omp parallel
+    #pragma omp parallel for
+    for(int i = 0; i < blocks; i++)
     {
-        std::vector<std::vector<unsigned char>> local_hashes; 
-        // std::cout << work_block_size * omp_get_thread_num()<< "--" <<std::min(work_block_size * (omp_get_thread_num()+1),blocks) << std::endl;
-        int start = work_block_size * omp_get_thread_num();
-        int end = std::min(start + work_block_size ,blocks);
-        int i = start;
-        #pragma omp for private(i)
-        for( i = start; i < end; i++)
-        {
-            //print_vec(parsed_input);
-            auto hash_in = add(parsed_input,i);
-            auto hash_result = md5_wrap(hash_in);
-            
-            local_hashes.push_back(hash_result);
-            // print_md5_sum(hash_result);
-            
-            // print_vec(hash_result);
-            
-            // parsed_input = increment(parsed_input);
-        }
-        std::cout <<"size:" <<local_hashes.size() << "\n";
+        auto hash_in = add(parsed_input,i);
+        auto hash_result = md5_wrap(hash_in);
+        //this is very expensive
         #pragma omp critical
-        hashes.insert(hashes.end(),local_hashes.begin(),local_hashes.end());
+        hashes.push_back(hash_result);
     }
-    #pragma omp barrier
-    // print_md5_sum(parsed_input);
-
-    std::cout <<"size:" <<hashes.size() << "\n";
+    
     std::sort(hashes.begin(),hashes.end(),less);
+    
     for(auto i:indices)
-    {
         print_md5_sum(hashes[i]);
-    }
-    // for(auto i:hashes)
-    // {
-    //     print_md5_sum(i);
-    // }
-
-    // std::cout << (char (255 +1)) << "\n";
-//     print_md5_sum(hashes[0]);
-// // print_md5_sum(hashes[1]);
-//     print_md5_sum(hashes[2]);
-// print_md5_sum(hashes[3]);
-
-
-
-    //print_md5_sum(hash_result);
-   // std::string input = "Test";
-    //MD5((unsigned char *) input.c_str(), input.length() ,result);
-    //print_md5_sum(result);
+    
+    return EXIT_SUCCESS;
 }
