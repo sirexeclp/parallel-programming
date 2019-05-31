@@ -1,7 +1,7 @@
 all: hoi
 
 hoi: hoi.cpp
-	g++ -pthread -fopenmp $< -O3 -o $@ -lssl -lcrypto
+	g++ -std=c++11 -pthread -fopenmp $< -O3 -o $@ -lssl -lcrypto
 
 clean:
 	rm hoi
