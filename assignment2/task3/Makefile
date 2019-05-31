@@ -12,4 +12,7 @@ test: hoi
 validate: hoi
 	python3 validator.py;exit=$$?; if [ $$exit -eq 0 ]; then echo "\033[32mOK"; else echo "\033[31mValidation failed!"; fi; echo "Validation exited with code $$exit";
 
-.PHONY: clean all test
+test2: hoi
+	./hoi deadc0deba5e 65536 0 1 24319 24320
+
+.PHONY: clean all test test2
