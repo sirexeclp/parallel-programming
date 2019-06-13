@@ -11,6 +11,10 @@
 #include <iostream>
 #include <string.h>
 #include <algorithm> 
+// #include <parallel/algorithm>
+#include <execution>
+
+//#define _GLIBCXX_PARALLEL
 
 #define INPUT_SIZE 64 // 512bit /8 bits/byte
 
@@ -84,7 +88,7 @@ void print_vec(std::vector<unsigned char> input)
     }
     std::cout << "\n";
 }
-const bool less( std::vector<unsigned char> &a, std::vector<unsigned char> &b)
+const bool less( const std::vector<unsigned char> &a, const std::vector<unsigned char> &b)
 {
     for(int i =0; i< a.size(); i++)
      {   
@@ -137,19 +141,17 @@ int main(int argc, char * argv[])
         indices.push_back(atoi(argv[i]));
     }
 
-    std::vector<std::vector<unsigned char>> hashes; 
+    std::vector<std::vector<unsigned char>> hashes(blocks);
     
     #pragma omp parallel for
     for(int i = 0; i < blocks; i++)
     {
         auto hash_in = add(parsed_input,i);
         auto hash_result = md5_wrap(hash_in);
-        //this is very expensive
-        #pragma omp critical
-        hashes.push_back(hash_result);
+        hashes[i] = (hash_result);
     }
     
-    std::sort(hashes.begin(),hashes.end(),less);
+    std::sort(std::execution::par, hashes.begin(),hashes.end(),less);
     
     for(auto i:indices)
         print_md5_sum(hashes[i]);
