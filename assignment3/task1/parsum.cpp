@@ -4,10 +4,19 @@
 #include <sstream>
 #include <fstream>
 #include <streambuf>
-
+#include <cstdint>
+#include <math.h> 
 #define __CL_ENABLE_EXCEPTIONS
 #include <CL/cl.hpp>
 #define __ERR_STR(x) #x
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <inttypes.h>
+
+typedef unsigned __int128 uint128_t;
+#define INT_TYPE  uint128_t
 
 template <class T>
 class GenericBuffer : public cl::Buffer
@@ -20,8 +29,7 @@ public:
 					cl_int *err = NULL) : cl::Buffer()
 	{
 		cl_int error;
-
-		// cl_mem_flags flags = 0;
+		// c__uint128_tl_mem_flags flags = 0;
 		// if (readOnly)
 		// {
 		// 	flags |= CL_MEM_READ_ONLY;
@@ -108,16 +116,39 @@ cl::Kernel compileKernelFromFile(cl::Context context,cl::Device device, std::str
 	return cl::Kernel(program, kernelName.c_str());
 }
 
+/*print_u128_u function from https://stackoverflow.com/questions/11656241/how-to-print-uint128-t-number-using-gcc*/
+/*      UINT64_MAX 18446744073709551615ULL */
+#define P10_UINT64 10000000000000000000ULL   /* 19 zeroes */
+#define E10_UINT64 19
+
+#define STRINGIZER(x)   # x
+#define TO_STRING(x)    STRINGIZER(x)
+
+static int print_u128_u(uint128_t u128) {
+    int rc;
+    if (u128 > UINT64_MAX) {
+        uint128_t leading = u128 / P10_UINT64;
+        uint64_t trailing = u128 % P10_UINT64;
+        rc = print_u128_u(leading);
+        rc += printf("%." TO_STRING(E10_UINT64)
+        PRIu64, trailing);
+    } else {
+        uint64_t u64 = u128;
+        rc = printf("%"
+        PRIu64, u64);
+    }
+    return rc;
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 3) {
         printf("usage: ./parsum <start> <end>");
         return EXIT_FAILURE;
     }
 
-    long long start = atoll(argv[1]);
-    long long end = atoll(argv[2]);
-	const size_t N = 1000;
-	
+    uint64_t start = atoll(argv[1]);
+	uint64_t end = atoll(argv[2]);
+	uint64_t range = end - start;
     try
 	{
 		// Get list of OpenCL platforms.
@@ -150,7 +181,7 @@ int main(int argc, char *argv[]) {
 				// 	continue;
 
 				std::string name = d.getInfo<CL_DEVICE_NAME>();
-				std::cout << name << "\n";
+				std::cout << name << " " << "\n";
 			}
 		}
 
@@ -158,36 +189,119 @@ int main(int argc, char *argv[]) {
 		context = cl::Context(selectedDevice);
 
 		// // Create command queue.
-		GenericQueue queue(context, selectedDevice);
+		cl::CommandQueue queue(context, selectedDevice);
 
-		auto kernel = compileKernelFromFile(context, selectedDevice,"sum", "kernel.c");
+		auto kernel = compileKernelFromFile(context, selectedDevice, "reduce", "kernel.c");
+		
+		// // auto reduceKernel = compileKernelFromFile(context, selectedDevice, "reduce", "init.c");
+	
+		// // // // Prepare input data.
 
-		// // Prepare input data.
-		std::vector<long> a(N, 1);
-		std::vector<long> b(N/2);
-		// std::vector<double> c(N);
+		// // // std::vector<double> c(N);
 
-		// // Allocate device buffers and transfer input data to device.
-		GenericBuffer<long> A(context, a, CL_MEM_READ_ONLY);
-		GenericBuffer<long> B(context, b, CL_MEM_READ_WRITE);
-		// GenericBuffer<double> C(context, c, false);
+		u_int64_t max_n = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+		auto dims =  selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
+		
 
-		std::cout << "test";
-		// Set kernel parameters.
-		kernel.setArg(0, A);
-		kernel.setArg(1, B);
-		std::cout << "test2";
+		u_int16_t workpack_size = std::ceil(range / float(max_n));
 
-		queue.enqueueWriteBuffer(A,CL_TRUE);
+		std::cout << "workpack_size: " << workpack_size << "\n";
+		// // // // Allocate device buffers and transfer input data to device.
+		// // // cl::Buffer A(context, a.begin(),a.end(), false);
 
-		// // Launch kernel on the compute device.
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, N/2 , cl::NullRange);
 
-		// // Get result back to host.
-		queue.enqueueReadBuffer(B, CL_TRUE, 0, b.size() * sizeof(long), b.data());
 
+		std::vector<uint64_t> workpack_start(workpack_size);
+		std::vector<uint64_t> workpack_end(workpack_size);
+		
+		for(int i = 0; i<workpack_size; i++)
+		{
+			workpack_start[i] = start + (i*workpack_size);
+			workpack_end[i] = std::min(workpack_start[i] + max_n, end);
+			std::cout << workpack_start[i] << " " << workpack_end[i] << "\n";
+		}
+
+		cl::Buffer b_workpack_start(context, CL_MEM_READ_WRITE, sizeof( uint64_t) * workpack_size);
+		cl::Buffer b_workpack_end(context, CL_MEM_READ_WRITE, sizeof( uint64_t) * workpack_size);
+		cl::Buffer b_workpack_result(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(workpack_size +1));
+		// // // GenericBuffer<double> C(context, c, false);
+
+
+
+		queue.enqueueWriteBuffer(b_workpack_start,CL_TRUE,0,sizeof(uint64_t) * workpack_start.size() ,workpack_start.data());
+		queue.enqueueWriteBuffer(b_workpack_end,CL_TRUE,0,sizeof(uint64_t) * workpack_end.size() ,workpack_end.data());
+
+
+		// kernel.setArg(0, start);
+		// kernel.setArg(1, A);
+		// uint64_t vals [] = {0,CL_ULONG_MAX,0,1};
+		// kernel.setArg(0, vals[0]);
+		// kernel.setArg(1, vals[1]);
+		// kernel.setArg(2, vals[2]);
+		// kernel.setArg(3, vals[3]);
+		// kernel.setArg(4, A);
+		// kernel.setArg(5, B);
+
+		std::vector<uint64_t> results;
+
+		for(int workpackId = 0; workpackId<workpack_size; workpackId++)
+		{
+
+			u_int64_t threads = std::min(workpack_end[workpackId]- workpack_start[workpackId],max_n);
+
+			u_int64_t x = std::min(threads, dims[0]);
+			u_int64_t y = std::min(threads/x, dims[1]);
+			u_int64_t z = std::min(threads/(y*x), dims[2]);
+			std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n"; 
+
+
+			kernel.setArg(0, (uint64_t) workpackId);
+			kernel.setArg(1, b_workpack_start);
+			kernel.setArg(2, b_workpack_end);
+			kernel.setArg(3, b_workpack_result);
+			kernel.setArg(4, (workpack_size ) * sizeof(uint64_t), NULL);
+
+			// queue.enqueueNDRangeKernel(kernel, x, y , z);
+			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(x,y,z) , cl::NullRange);
+			uint64_t result;
+			queue.enqueueReadBuffer(b_workpack_result, CL_TRUE, 0, sizeof(result), &result);
+			results.push_back(result);
+		}
+
+		uint64_t total;
+		for(auto i: results)
+		{
+			total +=i;
+		}
+
+		// // kernel.setArg(1, A);
+		// // kernel.setArg(0, B);
+		// // queue.enqueueNDRangeKernel(kernel, cl::NullRange, 1 , cl::NullRange);
+
+		// //Launch kernel on the compute device.
+		// int flag = 0;
+		// for (int i = ceil((N+2)/2.); i > 1; i=ceil(i/2.))
+		// {
+		// 	// Set kernel parameters.
+		// 	reduceKernel.setArg(flag, A);
+		// 	reduceKernel.setArg(!flag, B);
+		// 	flag = !flag;
+		// 	queue.enqueueNDRangeKernel(reduceKernel, cl::NullRange, i , cl::NullRange);
+		// }
+		// // // Get result back to host.
+		// u_int64_t result;
+		// queue.enqueueReadBuffer((flag ? B:A), CL_TRUE, 0, sizeof(result), &result);
+		// uint64_t result1;
+		// uint64_t result2;
+
+		// queue.enqueueReadBuffer(b_workpack_result, CL_TRUE, 0, sizeof(result1), &result1);
+		std::cout << total << "\n";
+		// queue.enqueueReadBuffer(B, CL_TRUE, 0, sizeof(result2),  &result2 );
 		// // Should get '3' here.
-		std::cout << b[0] << std::endl;
+		// std::cout << result2 << result1;
+		// uint128_t combined_result = result2;
+		// combined_result += result1 *  UINT64_MAX;
+		// print_u128_u(combined_result);
 	}
 	catch (const cl::Error &err)
 	{
