@@ -6,11 +6,10 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
-#include <pthread.h>
 #include <fstream>
 
 #define OUTPUT_NAME "output.txt"
-#define CELL_T double
+#define CELL_T float
 
 class Map {
     public:
@@ -135,7 +134,7 @@ void update_cell(Map * map_aggregated, Map * map_temp, int x, int y)
 
 void update_row(Map * map_aggregated, Map * map_temp, int y)
 {
-    #pragma omp parallel for
+    
     for (int x = 0; x < map_aggregated->width; x++)
     {
         update_cell(map_aggregated, map_temp, x, y);
@@ -175,6 +174,7 @@ int main(int argc, char* argv[])
     int rows =  atoi(argv[2]);
     int columns = atoi(argv[1]);
     Map * map_aggregated = new Map(columns, rows);
+    Map * map_temp = new Map(columns, rows);
     
     int rounds = atoi(argv[3]);
     char * input_file = argv[4];
@@ -183,9 +183,6 @@ int main(int argc, char* argv[])
 
     for (int round = 0; round < rounds; round++)
     {
-        Map * map_temp = new Map(atoi(argv[1]), atoi(argv[2]));
-
-        #pragma omp parallel for
         for (int j = 0; j < hotSpots.size(); j++)
         {
             auto hotSpot = hotSpots[j];
@@ -194,18 +191,15 @@ int main(int argc, char* argv[])
                 (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
             }
         }
-
-        #pragma omp parallel for
+        
         for (int j = 0; j < rows; j++)
         {
             update_row(map_aggregated,map_temp,j);
         }
 
-        delete map_aggregated;
-        map_aggregated = map_temp;
+        std::swap(map_aggregated, map_temp);
     }
-
-    #pragma omp parallel for
+    
     for (int j = 0; j < hotSpots.size(); j++)
     {
         auto hotSpot = hotSpots[j];
@@ -226,6 +220,7 @@ int main(int argc, char* argv[])
     }
     
     delete map_aggregated;
+    delete map_temp;
 
     return EXIT_SUCCESS;
  }
