@@ -242,6 +242,18 @@ std::vector<Hotspot> read_input(std::string file_name)
     return hotspots;
 }
 
+void set_hotspots(std::vector<Hotspot> hotSpots, Map * map_aggregated, int round)
+{
+    for (int j = 0; j < hotSpots.size(); j++)
+    {
+        auto hotSpot = hotSpots[j];
+        if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
+        {
+            (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
     if (argc < 5)
@@ -255,7 +267,6 @@ int main(int argc, char* argv[])
     int map_size = sizeof(CELL_T) *rows*columns;
     
     Map * map_aggregated = new Map(columns, rows);
-    Map * map_temp = new Map(columns, rows);
     
     int rounds = atoi(argv[3]);
     char * input_file = argv[4];
@@ -310,47 +321,31 @@ int main(int argc, char* argv[])
         cl::Buffer b_map_before(context, CL_MEM_READ_WRITE,map_size);
 		cl::Buffer b_map_after(context, CL_MEM_READ_WRITE, map_size);
 
-        // ----------------------------------------- OLD STUFF -----------------------------------------
+        // 7: set kernel arguments
+        kernel.setArg(0, b_map_before);
+        kernel.setArg(1, b_map_after);
 
+        // ----------------------------------------- OLD STUFF -----------------------------------------
+        //main simulation loop
         for (int round = 0; round < rounds; round++)
         {
             //set hotspots
-            for (int j = 0; j < hotSpots.size(); j++)
-            {
-                auto hotSpot = hotSpots[j];
-                if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
-                {
-                    (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-                }
-            }
+            set_hotspots(hotSpots, map_aggregated, round);
             
-            //compute next round
-            kernel.setArg(0, b_map_before);
-			kernel.setArg(1, b_map_after);
+            // 8: write buffer to device
             queue.enqueueWriteBuffer(b_map_before,CL_TRUE,0,map_size,map_aggregated->cells);
+            
+            // 9: run kernel on device
             queue.enqueueNDRangeKernel(kernel, cl::NullRange , cl::NDRange(map_aggregated->width,map_aggregated->height,1) , cl::NullRange);
+            
+            //10: read buffer from device
             queue.enqueueReadBuffer(b_map_after, CL_TRUE, 0, map_size,map_aggregated->cells );
-            // for (int j = 0; j < rows; j++)
-            // {
-            //     for (int x = 0; x < map_aggregated->width; x++)
-            //     {
-            //         update_cell(map_aggregated, map_temp, x, j);
-            //     }
-            // }
-
-            // std::swap(map_aggregated, map_temp);
         }
 
-        //set hotspots on last time
-        for (int j = 0; j < hotSpots.size(); j++)
-        {
-            auto hotSpot = hotSpots[j];
-            if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
-            {
-                (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-            }
-        }
+        //set hotspots one last time
+        set_hotspots(hotSpots, map_aggregated, rounds);
 
+        //output stuff
         if (argc == 6)
         {
             auto coordinateFile = argv[5];
@@ -362,7 +357,6 @@ int main(int argc, char* argv[])
         }
         
         delete map_aggregated;
-        delete map_temp;
 
         // ----------------------------------------- OLD STUFF -----------------------------------------
 
