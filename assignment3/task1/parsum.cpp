@@ -203,27 +203,27 @@ int main(int argc, char *argv[]) {
 		auto dims =  selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
 		
 
-		u_int16_t workpack_size = std::ceil(range / float(max_n));
+		u_int16_t num_workpacks = std::ceil(range / float(max_n));
 
-		std::cout << "workpack_size: " << workpack_size << "\n";
+		std::cout << "num_workpacks: " << num_workpacks << "\n";
 		// // // // Allocate device buffers and transfer input data to device.
 		// // // cl::Buffer A(context, a.begin(),a.end(), false);
 
 
 
-		std::vector<uint64_t> workpack_start(workpack_size);
-		std::vector<uint64_t> workpack_end(workpack_size);
+		std::vector<uint64_t> workpack_start(num_workpacks);
+		std::vector<uint64_t> workpack_end(num_workpacks);
 		
-		for(int i = 0; i<workpack_size; i++)
+		for(int i = 0; i<num_workpacks; i++)
 		{
-			workpack_start[i] = start + (i*workpack_size);
+			workpack_start[i] = start + (i*max_n);
 			workpack_end[i] = std::min(workpack_start[i] + max_n, end);
 			std::cout << workpack_start[i] << " " << workpack_end[i] << "\n";
 		}
 
-		cl::Buffer b_workpack_start(context, CL_MEM_READ_WRITE, sizeof( uint64_t) * workpack_size);
-		cl::Buffer b_workpack_end(context, CL_MEM_READ_WRITE, sizeof( uint64_t) * workpack_size);
-		cl::Buffer b_workpack_result(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(workpack_size +1));
+		cl::Buffer b_workpack_start(context, CL_MEM_READ_WRITE, sizeof( uint64_t) * num_workpacks);
+		cl::Buffer b_workpack_end(context, CL_MEM_READ_WRITE, sizeof( uint64_t) * num_workpacks);
+		cl::Buffer b_workpack_result(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(num_workpacks +2));
 		// // // GenericBuffer<double> C(context, c, false);
 
 
@@ -244,10 +244,10 @@ int main(int argc, char *argv[]) {
 
 		std::vector<uint64_t> results;
 
-		for(int workpackId = 0; workpackId<workpack_size; workpackId++)
+		for(int workpackId = 0; workpackId<num_workpacks; workpackId++)
 		{
 
-			u_int64_t threads = std::min(workpack_end[workpackId]- workpack_start[workpackId],max_n);
+			u_int64_t threads = std::min(workpack_end[workpackId]- workpack_start[workpackId]+1,max_n);
 
 			u_int64_t x = std::min(threads, dims[0]);
 			u_int64_t y = std::min(threads/x, dims[1]);
@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
 			kernel.setArg(1, b_workpack_start);
 			kernel.setArg(2, b_workpack_end);
 			kernel.setArg(3, b_workpack_result);
-			kernel.setArg(4, (workpack_size ) * sizeof(uint64_t), NULL);
+			kernel.setArg(4, (num_workpacks +2) * sizeof(uint64_t), NULL);
 
 			// queue.enqueueNDRangeKernel(kernel, x, y , z);
 			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(x,y,z) , cl::NullRange);
