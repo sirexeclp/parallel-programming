@@ -98,9 +98,9 @@ cl::Kernel compileKernelFromFile(cl::Context context,cl::Device device, std::str
 	std::stringstream sstr;
 	sstr << kernelSourceFile.rdbuf();
 	std::string kernelSource = sstr.str();
+
 	// Compile OpenCL program for found device.
-	cl::Program program(context, cl::Program::Sources(
-										1, std::make_pair(kernelSource.c_str(), kernelSource.length())));
+	cl::Program program(context, cl::Program::Sources(1, std::make_pair(kernelSource.c_str(), kernelSource.length())));
 
 	try
 	{
@@ -120,7 +120,8 @@ cl::Kernel compileKernelFromFile(cl::Context context,cl::Device device, std::str
 
 // Application logic
 
-class Map {
+class Map
+{
     public:
         CELL_T *cells;
         int width;
@@ -300,6 +301,9 @@ int main(int argc, char* argv[])
 
         // 4: Create command queue
 		cl::CommandQueue queue(context, selectedDevice);
+
+        // 5: Create kernel
+        auto kernel = compileKernelFromFile(context, selectedDevice, "update_cell", "kernel.c");
     }
     catch (const cl::Error &err)
 	{
@@ -310,118 +314,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-    // try
-	// {
-
-
-
-	// 	auto kernel = compileKernelFromFile(context, selectedDevice, "reduce", "kernel.c");
-		
-	// 	// // auto reduceKernel = compileKernelFromFile(context, selectedDevice, "reduce", "init.c");
-	
-	// 	// // // // Prepare input data.
-
-	// 	// // // std::vector<double> c(N);
-
-	// 	u_int64_t max_n = 250;//selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
-	// 	auto dims =  selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
-		
-
-	// 	u_int16_t num_workpacks = std::ceil((range +1)/ float(max_n));
-
-	// 	std::cout << "num_workpacks: " << num_workpacks << "\n";
-	// 	// // // // Allocate device buffers and transfer input data to device.
-	// 	// // // cl::Buffer A(context, a.begin(),a.end(), false);
-	// 	// auto prefSize = kernel.getInfo<CL_KERNEL_WORK_GROUP_SIZE>();
-	// 	// std::cout << prefSize[0] <<"\n";
-
-	// 	cl::Buffer b_workpack_result(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(num_workpacks ));
-	// 	// // // GenericBuffer<double> C(context, c, false);
-
-
-	// 	// kernel.setArg(0, start);
-	// 	// kernel.setArg(1, A);
-	// 	// uint64_t vals [] = {0,CL_ULONG_MAX,0,1};
-	// 	// kernel.setArg(0, vals[0]);
-	// 	// kernel.setArg(1, vals[1]);
-	// 	// kernel.setArg(2, vals[2]);
-	// 	// kernel.setArg(3, vals[3]);
-	// 	// kernel.setArg(4, A);
-	// 	// kernel.setArg(5, B);
-
-	// 	// std::vector<uint64_t> results;
-
-	// 	// for(int workpackId = 0; workpackId<num_workpacks; workpackId++)
-	// 	// {
-
-	// 		u_int64_t threads =  range +1;//std::min(workpack_end[workpackId]- workpack_start[workpackId]+1,max_n);
-
-	// 		u_int64_t x = threads % UINT16_MAX;//std::min(threads, dims[0]);
-	// 		u_int64_t y = threads / UINT16_MAX+1;//std::min(threads/x, dims[1]);
-	// 		u_int64_t z = 1;//std::min(threads/(y*x), dims[2]);
-	// 		std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n"; 
-
-	// 		size_t start_x = start % UINT16_MAX;
-	// 		size_t start_y = start / UINT16_MAX;
-
-	// 		// kernel.setArg(0, (uint64_t) workpackId);
-	// 		// kernel.setArg(1, b_workpack_start);
-	// 		// kernel.setArg(2, b_workpack_end);
-	// 		kernel.setArg(0, b_workpack_result);
-	// 		kernel.setArg(1, (num_workpacks ) * sizeof(uint64_t), NULL);
-
-	// 		// queue.enqueueNDRangeKernel(kernel, x, y , z);
-	// 		std::cout << "start:"<< (start_y << 32) + start_x << "\n";
-	// 		queue.enqueueNDRangeKernel(kernel, cl::NDRange(start_x,start_y,0) , cl::NDRange(x,y,z) , cl::NullRange);
-	// 		std::vector<uint64_t> result(num_workpacks);
-	// 		queue.enqueueReadBuffer(b_workpack_result, CL_TRUE, 0, sizeof(uint64_t) * num_workpacks, result.data());
-	// 		//results.push_back(result);
-	// 		std::cout << result[0] << "\n";
-	// 	// }
-
-	// 	uint64_t total;
-	// 	for(auto i: result)
-	// 	{
-	// 		total +=i;
-	// 	}
-
-	// 	// // kernel.setArg(1, A);
-	// 	// // kernel.setArg(0, B);
-	// 	// // queue.enqueueNDRangeKernel(kernel, cl::NullRange, 1 , cl::NullRange);
-
-	// 	// //Launch kernel on the compute device.
-	// 	// int flag = 0;
-	// 	// for (int i = ceil((N+2)/2.); i > 1; i=ceil(i/2.))
-	// 	// {
-	// 	// 	// Set kernel parameters.
-	// 	// 	reduceKernel.setArg(flag, A);
-	// 	// 	reduceKernel.setArg(!flag, B);
-	// 	// 	flag = !flag;
-	// 	// 	queue.enqueueNDRangeKernel(reduceKernel, cl::NullRange, i , cl::NullRange);
-	// 	// }
-	// 	// // // Get result back to host.
-	// 	// u_int64_t result;
-	// 	// queue.enqueueReadBuffer((flag ? B:A), CL_TRUE, 0, sizeof(result), &result);
-	// 	// uint64_t result1;
-	// 	// uint64_t result2;
-
-	// 	// queue.enqueueReadBuffer(b_workpack_result, CL_TRUE, 0, sizeof(result1), &result1);
-	// 	std::cout << total << "\n";
-	// 	// queue.enqueueReadBuffer(B, CL_TRUE, 0, sizeof(result2),  &result2 );
-	// 	// // Should get '3' here.
-	// 	// std::cout << result2 << result1;
-	// 	// uint128_t combined_result = result2;
-	// 	// combined_result += result1 *  UINT64_MAX;
-	// 	// print_u128_u(combined_result);
-	// }
-	// catch (const cl::Error &err)
-	// {
-	// 	std::cerr
-	// 		<< "OpenCL error: "
-	// 		<< err.what() << "(" << getErrorString(err.err()) << ")"
-	// 		<< std::endl;
-	// 	return 1;
-	// }
+    // ----------------------------------------- OLD STUFF -----------------------------------------
 
     for (int round = 0; round < rounds; round++)
     {
@@ -466,6 +359,8 @@ int main(int argc, char* argv[])
     
     delete map_aggregated;
     delete map_temp;
+
+    // ----------------------------------------- OLD STUFF -----------------------------------------
 
     return EXIT_SUCCESS;
  }
