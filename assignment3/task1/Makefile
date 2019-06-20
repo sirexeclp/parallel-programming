@@ -10,6 +10,6 @@ clean:
 	rm -f parsum
 
 test: parsum
-	./parsum 1 11
+	./parsum 2 10
 
 .PHONY: validate clean all test

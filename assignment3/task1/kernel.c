@@ -39,21 +39,23 @@ kernel void add128(const unsigned long a_high, const unsigned long a_low, const 
 //     }
 
 // }
-
-kernel void reduce(const unsigned long workpack_id,
-                   global unsigned long *workpack_start,
-                   global unsigned long *workpack_end,
-                   global unsigned long *workpack_result,
+//#define __UINT32_MAX__ 0xffffffffU
+kernel void reduce(global unsigned long *workpack_result,
                    local unsigned long *tmp)
 {
+    int lid = get_local_id(0) + (get_local_id(1) * get_local_size(0)) + (get_local_size(0) * get_local_size(1) * get_local_id(2));
+    int group_size = get_local_size(0) * get_local_size(1) * get_local_size(2);
+    
+    unsigned long start = (get_global_offset(1) << 32) + get_global_offset(0);
+    unsigned long range = ((get_global_size(1)-1)<< 32) + get_global_size(0);
 
-    unsigned long start = workpack_start[workpack_id];
-    unsigned long end = workpack_start[workpack_id];
+    unsigned long global_id =  get_global_id(0) + (get_global_id(1) << 32) -1;
 
-    int lid = get_local_id(0);
-    tmp[lid] = start + get_global_id(0);
+    unsigned long group_id =(get_group_id(0) + get_num_groups(0) *  get_group_id(1) + get_group_id(2)*get_num_groups(0)*get_num_groups(1) );
+
+    tmp[lid] = start + global_id;
     barrier(CLK_LOCAL_MEM_FENCE);
-    int group_size = get_local_size(0);
+    group_size = range - group_id;
     int half_block_size = group_size / 2;
     while (half_block_size > 0)
     {
@@ -76,5 +78,5 @@ kernel void reduce(const unsigned long workpack_id,
     }
     //barrier(CLK_LOCAL_MEM_FENCE);
     if (lid == 0)
-        workpack_result[workpack_id] = tmp[0];
+        workpack_result[group_id] = tmp[0];
 }
