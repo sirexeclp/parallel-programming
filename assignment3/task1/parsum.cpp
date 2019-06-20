@@ -6,6 +6,7 @@
 #include <streambuf>
 #include <cstdint>
 #include <math.h> 
+#include <stack>
 #define __CL_ENABLE_EXCEPTIONS
 #include <CL/cl.hpp>
 #define __ERR_STR(x) #x
@@ -138,6 +139,23 @@ static int print_u128_u(uint128_t u128) {
         PRIu64, u64);
     }
     return rc;
+}
+
+void print128(uint128_t in)
+{
+	std::stack<char> result;
+	do 
+	{
+		result.push((in%10)+'0');
+		in /=10;
+
+	}while(in >0);
+	while (!result.empty())
+	{
+		std::cout << result.top();
+		result.pop();
+	}
+	
 }
 
 const char *getErrorString(cl_int error)
@@ -277,7 +295,8 @@ int main(int argc, char *argv[]) {
 
 		// // // std::vector<double> c(N);
 
-		u_int64_t max_n = 250;//selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+		int max_workgroup_size = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+		u_int64_t max_n = 250;//
 		auto dims =  selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
 		
 
@@ -289,9 +308,12 @@ int main(int argc, char *argv[]) {
 		// auto prefSize = kernel.getInfo<CL_KERNEL_WORK_GROUP_SIZE>();
 		// std::cout << prefSize[0] <<"\n";
 
-		cl::Buffer b_workpack_result(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(num_workpacks ));
+		cl::Buffer b_workpack_result_low(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(num_workpacks ));
+		cl::Buffer b_workpack_result_high(context, CL_MEM_READ_WRITE, sizeof( uint64_t) *(num_workpacks ));
+
 		// // // GenericBuffer<double> C(context, c, false);
 
+		// std::vector<uint128_t> combined_result;
 
 		// kernel.setArg(0, start);
 		// kernel.setArg(1, A);
@@ -307,7 +329,7 @@ int main(int argc, char *argv[]) {
 
 		// for(int workpackId = 0; workpackId<num_workpacks; workpackId++)
 		// {
-
+			
 			u_int64_t threads =  range +1;//std::min(workpack_end[workpackId]- workpack_start[workpackId]+1,max_n);
 
 			u_int64_t x = threads % UINT16_MAX;//std::min(threads, dims[0]);
@@ -321,22 +343,32 @@ int main(int argc, char *argv[]) {
 			// kernel.setArg(0, (uint64_t) workpackId);
 			// kernel.setArg(1, b_workpack_start);
 			// kernel.setArg(2, b_workpack_end);
-			kernel.setArg(0, b_workpack_result);
-			kernel.setArg(1, (num_workpacks ) * sizeof(uint64_t), NULL);
+			kernel.setArg(0, b_workpack_result_low);
+			kernel.setArg(1, b_workpack_result_high);
+
+			kernel.setArg(2, max_workgroup_size * sizeof(uint64_t), NULL);
+			kernel.setArg(3, max_workgroup_size * sizeof(uint64_t), NULL);
 
 			// queue.enqueueNDRangeKernel(kernel, x, y , z);
 			std::cout << "start:"<< (start_y << 32) + start_x << "\n";
 			queue.enqueueNDRangeKernel(kernel, cl::NDRange(start_x,start_y,0) , cl::NDRange(x,y,z) , cl::NullRange);
-			std::vector<uint64_t> result(num_workpacks);
-			queue.enqueueReadBuffer(b_workpack_result, CL_TRUE, 0, sizeof(uint64_t) * num_workpacks, result.data());
+			std::vector<uint64_t> result_low(num_workpacks,0);
+			queue.enqueueReadBuffer(b_workpack_result_low, CL_TRUE, 0, sizeof(uint64_t) * num_workpacks, result_low.data());
+
+			std::vector<uint64_t> result_high(num_workpacks,0);
+			queue.enqueueReadBuffer(b_workpack_result_high, CL_TRUE, 0, sizeof(uint64_t) * num_workpacks, result_high.data());
+			
+			// for(int i =0)
 			//results.push_back(result);
-			std::cout << result[0] << "\n";
+			std::cout << result_low[0] << "\n";
 		// }
 
-		uint64_t total;
-		for(auto i: result)
+		uint128_t total;
+		for(int i =0; i< num_workpacks;i++)
 		{
-			total +=i;
+			total += result_low[i];
+			uint128_t high = result_high[i];
+			total += (high << 64);
 		}
 
 		// // kernel.setArg(1, A);
@@ -360,13 +392,14 @@ int main(int argc, char *argv[]) {
 		// uint64_t result2;
 
 		// queue.enqueueReadBuffer(b_workpack_result, CL_TRUE, 0, sizeof(result1), &result1);
-		std::cout << total << "\n";
+		//std::cout << total << "\n";
 		// queue.enqueueReadBuffer(B, CL_TRUE, 0, sizeof(result2),  &result2 );
 		// // Should get '3' here.
 		// std::cout << result2 << result1;
-		// uint128_t combined_result = result2;
+		// uint128_t combined_result = UINT64_MAX;
 		// combined_result += result1 *  UINT64_MAX;
-		// print_u128_u(combined_result);
+		 print_u128_u(total);
+		// print128(total);
 	}
 	catch (const cl::Error &err)
 	{
@@ -376,4 +409,5 @@ int main(int argc, char *argv[]) {
 			<< std::endl;
 		return 1;
 	}
+	return EXIT_SUCCESS;
 }
