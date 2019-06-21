@@ -183,14 +183,14 @@ int main(int argc, char *argv[]) {
 			std::cerr << "OpenCL platforms not found." << "\n";
 			return EXIT_FAILURE;
 		}
-		std::cout << platforms.size() << " platforms found" << "\n";
+//		std::cout << platforms.size() << " platforms found" << "\n";
 
-		for (auto p: platforms)
-		{
-			auto vendor =  p.getInfo<CL_PLATFORM_VENDOR>();
-			auto name = p.getInfo<CL_PLATFORM_NAME>();
-			std::cout << vendor << " | " << name << "\n";
-		}
+//		for (auto p: platforms)
+//		{
+//			auto vendor =  p.getInfo<CL_PLATFORM_VENDOR>();
+//			auto name = p.getInfo<CL_PLATFORM_NAME>();
+//			std::cout << vendor << " | " << name << "\n";
+//		}
 
 		// Get first available GPU device which supports double precision.
 		std::vector<cl::Device> devices;
@@ -198,11 +198,11 @@ int main(int argc, char *argv[]) {
 		{
 			std::vector<cl::Device> tmp;
 			p.getDevices(CL_DEVICE_TYPE_ALL, &tmp);
-			for (auto d: tmp)
-			{
-				std::string name = d.getInfo<CL_DEVICE_NAME>();
-				std::cout << name << " " << "\n";
-			}
+//			for (auto d: tmp)
+//			{
+//				std::string name = d.getInfo<CL_DEVICE_NAME>();
+//				std::cout << name << " " << "\n";
+//			}
 			devices.insert(devices.end(), tmp.begin(), tmp.end());
 		}
 
@@ -219,12 +219,12 @@ int main(int argc, char *argv[]) {
 		// Prepare input data.
 
 		int max_workgroup_size = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
-		std::cout << max_workgroup_size  << "\n";
+//		std::cout << max_workgroup_size << "\n";
 		u_int64_t num_workpacks = std::ceil((range+1)/(float)max_workgroup_size);
 
-		std::cout << "num_workpacks: " << num_workpacks << "\n";
-		// Allocate device buffers and transfer input data to device.
+//		std::cout << "num_workpacks: " << num_workpacks << "\n";
 
+		// Allocate device buffers and transfer input data to device.
 		cl::Buffer b_workpack_result_low(context, CL_MEM_READ_WRITE, sizeof(uint64_t));
 		cl::Buffer b_workpack_result_high(context, CL_MEM_READ_WRITE, sizeof(uint64_t));
 
@@ -246,7 +246,7 @@ int main(int argc, char *argv[]) {
 			u_int64_t x = std::min((uint64_t)kernel_range, dims[0]);
 			u_int64_t y = std::min((uint64_t)kernel_range / x, dims[1]);
 			u_int64_t z = std::min((uint64_t)kernel_range / (y * x), dims[2]);
-			std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n";
+//			std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n";
 
 			kernel.setArg(0, offset);
 			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(kernel_range), cl::NDRange(x,y,z));
@@ -262,6 +262,7 @@ int main(int argc, char *argv[]) {
 		}
 
 		print_u128_u(total);
+		std::cout << "\n";
 	}
 	catch (const cl::Error &err)
 	{
