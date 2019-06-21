@@ -27,6 +27,14 @@ void print_md5_sum(std::vector<unsigned char> md) {
     printf("\n");
 }
 
+void print_md5_sum(unsigned char *md) {
+    int i;
+    for(i=0; i < MD5_DIGEST_LENGTH; i++) {
+            printf("%02x",md[i]);
+    }
+    printf("\n");
+}
+
 std::vector<unsigned char> md5_wrap(std::vector<unsigned char> input)
 {
     std::vector<unsigned char> result(MD5_DIGEST_LENGTH);
@@ -88,9 +96,9 @@ void print_vec(std::vector<unsigned char> input)
     }
     std::cout << "\n";
 }
-const bool less( const std::vector<unsigned char> &a, const std::vector<unsigned char> &b)
+const bool less( const unsigned char* a, const unsigned char * b)
 {
-    for(int i =0; i< a.size(); i++)
+    for(int i =0; i<MD5_DIGEST_LENGTH ; i++)
      {   
         if(a[i] > b[i])
             return false;
@@ -141,20 +149,23 @@ int main(int argc, char * argv[])
         indices.push_back(atoi(argv[i]));
     }
 
-    std::vector<std::vector<unsigned char>> hashes(blocks);
+    std::vector<unsigned char *> hashes(blocks);
     
     #pragma omp parallel for
     for(int i = 0; i < blocks; i++)
     {
         auto hash_in = add(parsed_input,i);
         auto hash_result = md5_wrap(hash_in);
-        hashes[i] = (hash_result);
+        auto tmp = new unsigned char[MD5_DIGEST_LENGTH];
+        std::copy(hash_result.begin(), hash_result.end(), tmp);
+        hashes[i] = (tmp);
     }
     
     std::sort(std::execution::par, hashes.begin(),hashes.end(),less);
     
     for(auto i:indices)
+    {
         print_md5_sum(hashes[i]);
-    
+    }
     return EXIT_SUCCESS;
 }
