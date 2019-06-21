@@ -5,7 +5,7 @@ kernel void reduce(
                    local unsigned long *tmp_low,
                    local unsigned long *tmp_high)
 {
-    int lid = get_local_id(0); // + (get_local_id(1) * get_local_size(0)) + (get_local_size(0) * get_local_size(1) * get_local_id(2));
+    int lid = get_local_id(0) + (get_local_id(1) * get_local_size(0)) + (get_local_size(0) * get_local_size(1) * get_local_id(2));
 
     unsigned long global_id = get_global_id(0);
 
@@ -14,7 +14,7 @@ kernel void reduce(
     tmp_high[lid] = 0;
 
     barrier(CLK_LOCAL_MEM_FENCE);
-    int group_size = get_local_size(0);
+    int group_size = get_local_size(0) * get_local_size(1) * get_local_size(2);
     int half_block_size = group_size / 2;
 
     while (half_block_size > 0)
@@ -34,16 +34,16 @@ kernel void reduce(
                     tmp_high[0] += tmp_high[group_size - 1] + (tmp_low[0] < tmp_low[group_size - 1]);
                 }
             }
-        }
 
+        }
         barrier(CLK_LOCAL_MEM_FENCE);
-        group_size = half_block_size;
-        half_block_size >>= 1;
+	group_size = half_block_size;
+        half_block_size = group_size / 2;
     }
 
     if (lid == 0)
     {
-        workpack_result_low[0] =  tmp_low[0];
-        workpack_result_high[0] = tmp_high[0];
+        workpack_result_low[get_group_id(0)] = tmp_low[0];
+        workpack_result_high[get_group_id(0)] = tmp_high[0];
     }
 }
