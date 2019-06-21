@@ -5,7 +5,7 @@
 #include <fstream>
 #include <streambuf>
 #include <cstdint>
-#include <math.h> 
+#include <math.h>
 #include <stack>
 #define __CL_ENABLE_EXCEPTIONS
 #include <CL/cl.hpp>
@@ -26,8 +26,7 @@ cl::Kernel compileKernelFromFile(cl::Context context,cl::Device device, std::str
 	sstr << kernelSourceFile.rdbuf();
 	std::string kernelSource = sstr.str();
 	// Compile OpenCL program for found device.
-	cl::Program program(context, cl::Program::Sources(
-										1, std::make_pair(kernelSource.c_str(), kernelSource.length())));
+	cl::Program program(context, cl::Program::Sources(1, std::make_pair(kernelSource.c_str(), kernelSource.length())));
 
 	try
 	{
@@ -72,20 +71,21 @@ static int print_u128_u(uint128_t u128) {
 void print128(uint128_t in)
 {
 	std::stack<char> result;
-	do 
+	do
 	{
-		result.push((in%10)+'0');
-		in /=10;
+		result.push((in % 10) + '0');
+		in /= 10;
 
-	}while(in >0);
+	} while (in > 0);
+
 	while (!result.empty())
 	{
 		std::cout << result.top();
 		result.pop();
 	}
-	
 }
 
+// source: https://stackoverflow.com/a/24336429
 const char *getErrorString(cl_int error)
 {
 switch(error){
@@ -166,11 +166,10 @@ switch(error){
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        printf("usage: ./parsum <start> <end>");
+        printf("usage: ./parsum <start> <end>\n");
         return EXIT_FAILURE;
     }
-
-    uint64_t start = atoll(argv[1]);
+	uint64_t start = atoll(argv[1]);
 	uint64_t end = atoll(argv[2]);
 	uint64_t range = end - start;
     try
@@ -185,7 +184,8 @@ int main(int argc, char *argv[]) {
 			return EXIT_FAILURE;
 		}
 		std::cout << platforms.size() << " platforms found" << "\n";
-		for(auto p: platforms)
+
+		for (auto p: platforms)
 		{
 			auto vendor =  p.getInfo<CL_PLATFORM_VENDOR>();
 			auto name = p.getInfo<CL_PLATFORM_NAME>();
@@ -193,40 +193,35 @@ int main(int argc, char *argv[]) {
 		}
 
 		// Get first available GPU device which supports double precision.
-		cl::Context context;
 		std::vector<cl::Device> devices;
-		for(auto p: platforms)
+		for (auto p: platforms)
 		{
-			p.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-
-			for (auto d: devices)
+			std::vector<cl::Device> tmp;
+			p.getDevices(CL_DEVICE_TYPE_ALL, &tmp);
+			for (auto d: tmp)
 			{
-				// if (!d->getInfo<CL_DEVICE_AVAILABLE>())
-				// 	continue;
-
 				std::string name = d.getInfo<CL_DEVICE_NAME>();
 				std::cout << name << " " << "\n";
 			}
+			devices.insert(devices.end(), tmp.begin(), tmp.end());
 		}
 
 		auto selectedDevice = devices[0];
+
+		cl::Context context;
 		context = cl::Context(selectedDevice);
 
-		// // Create command queue.
+		// Create command queue
 		cl::CommandQueue queue(context, selectedDevice);
 
 		auto kernel = compileKernelFromFile(context, selectedDevice, "reduce", "kernel.c");
-		
-		// // auto reduceKernel = compileKernelFromFile(context, selectedDevice, "reduce", "init.c");
-	
-		// // // // Prepare input data.
 
-		// // // std::vector<double> c(N);
+		// Prepare input data.
 
 		int max_workgroup_size = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
-		u_int64_t max_n = 250;//
-		auto dims =  selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
-		
+		u_int64_t max_n = 250;
+		auto dims = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
+
 
 		u_int16_t num_workpacks = std::ceil((range +1)/ float(max_n));
 
@@ -257,7 +252,7 @@ int main(int argc, char *argv[]) {
 
 		// for(int workpackId = 0; workpackId<num_workpacks; workpackId++)
 		// {
-			
+
 			u_int64_t threads =  range +1;//std::min(workpack_end[workpackId]- workpack_start[workpackId]+1,max_n);
 
 			u_int64_t x = threads % UINT16_MAX;//std::min(threads, dims[0]);
@@ -285,7 +280,7 @@ int main(int argc, char *argv[]) {
 
 			std::vector<uint64_t> result_high(num_workpacks,0);
 			queue.enqueueReadBuffer(b_workpack_result_high, CL_TRUE, 0, sizeof(uint64_t) * num_workpacks, result_high.data());
-			
+
 			// for(int i =0)
 			//results.push_back(result);
 			std::cout << result_low[0] << "\n";
