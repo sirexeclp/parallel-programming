@@ -260,7 +260,7 @@ int main(int argc, char *argv[]) {
 			u_int64_t z = std::min((uint64_t)local_kernel_range / (y * x), dims[2]);
 			// std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n";
 			// std::cout << "global_kernel_range " << global_kernel_range << "\n";
-			
+
 			// size_t x_global = std::min((size_t)global_kernel_range,(size_t) UINT16_MAX);
 			// x_global = (x_global/x) * x;
 			// size_t y_global = std::min((size_t)global_kernel_range/x_global,(size_t) UINT16_MAX);
@@ -282,9 +282,9 @@ int main(int argc, char *argv[]) {
 			offset += global_kernel_range;
 			local_kernel_range = std::min(end - offset + 1, (uint64_t) max_workgroup_size);
 			global_kernel_range = std::min(end-offset+1,(uint64_t) max_global_size);
-			num_groups = std::min(global_kernel_range / local_kernel_range,(uint64_t) max_groups);
+			num_groups = std::min(global_kernel_range / std::max(1, local_kernel_range), (uint64_t) max_groups);
 			global_kernel_range =  local_kernel_range * num_groups;
-			
+
 
 		}
 
