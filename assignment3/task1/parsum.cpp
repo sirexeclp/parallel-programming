@@ -206,7 +206,7 @@ int main(int argc, char *argv[]) {
 			devices.insert(devices.end(), tmp.begin(), tmp.end());
 		}
 
-		auto selectedDevice = devices[1];
+		auto selectedDevice = devices[0];
 
 		cl::Context context;
 		context = cl::Context(selectedDevice);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[]) {
 				total += (high << 64);
 			}
 			offset += global_kernel_range;
-			local_kernel_range = std::min(1UL,std::min(end - offset + 1, (uint64_t) max_workgroup_size));
+			local_kernel_range = std::min(end - offset + 1, (uint64_t) max_workgroup_size);
 			global_kernel_range = std::min(end-offset+1,(uint64_t) max_global_size);
 			num_groups = std::min(global_kernel_range / std::max(1, local_kernel_range), (uint64_t) max_groups);
 			global_kernel_range =  local_kernel_range * num_groups;
