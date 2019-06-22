@@ -217,7 +217,7 @@ int main(int argc, char *argv[]) {
 		auto kernel = compileKernelFromFile(context, selectedDevice, "reduce", "kernel.c");
 
 		// Prepare input data.
-		u_int64_t max_global_size = UINT32_MAX;
+		u_int64_t max_global_size = UINT16_MAX;
 		int max_workgroup_size = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
 		// std::cout << max_workgroup_size << "\n";
 		int max_groups = max_global_size / max_workgroup_size;
@@ -261,15 +261,15 @@ int main(int argc, char *argv[]) {
 			// std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n";
 			// std::cout << "global_kernel_range " << global_kernel_range << "\n";
 			
-			size_t x_global = std::min((size_t)global_kernel_range,(size_t) UINT16_MAX);
-			x_global = (x_global/x) * x;
-			size_t y_global = std::min((size_t)global_kernel_range/x_global,(size_t) UINT16_MAX);
+			// size_t x_global = std::min((size_t)global_kernel_range,(size_t) UINT16_MAX);
+			// x_global = (x_global/x) * x;
+			// size_t y_global = std::min((size_t)global_kernel_range/x_global,(size_t) UINT16_MAX);
 
 			// std::cout << "global sizes\nx: " << x_global << "\ny: " << y_global << "\n";
 			// std::cout << "num_groups " << num_groups<< "\n";
 
 			kernel.setArg(0, offset);
-			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(x_global,y_global), cl::NDRange(x,y,z));
+			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_kernel_range), cl::NDRange(x,y,z));
 			queue.enqueueReadBuffer(b_workpack_result_low,  CL_TRUE, 0, sizeof(uint64_t)*num_groups, tmp_low.data());
 			queue.enqueueReadBuffer(b_workpack_result_high, CL_TRUE, 0, sizeof(uint64_t)*num_groups, tmp_high.data());
 
