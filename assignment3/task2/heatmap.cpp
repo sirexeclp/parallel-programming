@@ -254,6 +254,8 @@ void set_hotspots(std::vector<Hotspot> hotSpots, Map * map_aggregated, int round
     }
 }
 
+#define DEVICE_SELECTOR CL_DEVICE_TYPE_ALL
+
 int main(int argc, char* argv[])
 {
     if (argc < 5)
@@ -297,15 +299,29 @@ int main(int argc, char* argv[])
 		std::vector<cl::Device> devices;
 		for (auto p: platforms)
 		{
-			p.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+		    std::vector<cl::Device> device;
+            try{
+                //this will throw if the platform does not have a device of requested type
+                p.getDevices(DEVICE_SELECTOR, &device);
+                devices.insert(devices.end(), device.begin(), device.end());
+            }catch(const cl::Error &err){}
 
-			for (auto d: devices)
-			{
-				std::string name = d.getInfo<CL_DEVICE_NAME>();
-				std::cout << name << " " << "\n";
-			}
 		}
-        auto selectedDevice = devices[devices.size()-1];
+
+        for (auto d: devices)
+        {
+            std::string name = d.getInfo<CL_DEVICE_NAME>();
+            std::cout << name << " " << "\n";
+        }
+
+        if (devices.empty())
+        {
+            std::cerr << "OpenCL devices not found." << "\n";
+            return EXIT_FAILURE;
+        }
+        
+        // 2.1: let's take the first device we found
+        auto selectedDevice = devices[0];
 
         // 3: Create context
         cl::Context context;
@@ -359,7 +375,7 @@ int main(int argc, char* argv[])
         delete map_aggregated;
 
         // ----------------------------------------- OLD STUFF -----------------------------------------
-
+        // return abs(-1000);
         return EXIT_SUCCESS;
 
     }
@@ -369,7 +385,7 @@ int main(int argc, char* argv[])
 			<< "OpenCL error: "
 			<< err.what() << "(" << getErrorString(err.err()) << ")"
 			<< std::endl;
-		return err.err();
+		return abs(err.err());
 	}
 
  }
