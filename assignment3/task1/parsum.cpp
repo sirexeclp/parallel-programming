@@ -217,16 +217,18 @@ int main(int argc, char *argv[]) {
 		auto kernel = compileKernelFromFile(context, selectedDevice, "reduce", "kernel.c");
 
 		// Prepare input data.
-
+		u_int64_t max_global_size = UINT16_MAX;
 		int max_workgroup_size = selectedDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
-//		std::cout << max_workgroup_size << "\n";
-		u_int64_t num_workpacks = std::ceil((range+1)/(float)max_workgroup_size);
+		// std::cout << max_workgroup_size << "\n";
+		int num_groups = max_global_size / max_workgroup_size;
+		max_global_size = num_groups * max_workgroup_size;
 
 //		std::cout << "num_workpacks: " << num_workpacks << "\n";
-
+		u_int64_t num_workpacks = std::ceil((range+1)/(float)max_global_size);
+		
 		// Allocate device buffers and transfer input data to device.
-		cl::Buffer b_workpack_result_low(context, CL_MEM_READ_WRITE, sizeof(uint64_t));
-		cl::Buffer b_workpack_result_high(context, CL_MEM_READ_WRITE, sizeof(uint64_t));
+		cl::Buffer b_workpack_result_low(context, CL_MEM_READ_WRITE, sizeof(uint64_t) * num_groups);
+		cl::Buffer b_workpack_result_high(context, CL_MEM_READ_WRITE, sizeof(uint64_t) * num_groups);
 
 		kernel.setArg(1, b_workpack_result_low);
 		kernel.setArg(2, b_workpack_result_high);
@@ -234,31 +236,47 @@ int main(int argc, char *argv[]) {
 		kernel.setArg(4, sizeof(uint64_t) * max_workgroup_size, NULL);
 
 		uint128_t total = 0;
-		uint64_t tmp_low, tmp_high;
+		// uint64_t tmp_low, tmp_high;
+		std::vector<uint64_t> tmp_low(num_groups), tmp_high(num_groups);
 		uint64_t offset = start; //+ i * max_workgroup_size;
-		int kernel_range = std::min(end-offset+1,(uint64_t) max_workgroup_size);
+		int local_kernel_range = std::min(end-offset+1,(uint64_t) max_workgroup_size);
+		uint64_t global_kernel_range = std::min(end-offset+1,(uint64_t) max_global_size);
+
+
+
 
 		auto dims =  selectedDevice.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
 
-
-		for (int i = 0; i < num_workpacks; i++)
+		num_groups = global_kernel_range / local_kernel_range;
+		// std::cout << "num_groups " << num_groups<< "\n";
+		// std::cout << "max_global " << max_global_size << "\n"; 
+		while (global_kernel_range>0)
 		{
-			u_int64_t x = std::min((uint64_t)kernel_range, dims[0]);
-			u_int64_t y = std::min((uint64_t)kernel_range / x, dims[1]);
-			u_int64_t z = std::min((uint64_t)kernel_range / (y * x), dims[2]);
-//			std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n";
 
+			u_int64_t x = std::min((uint64_t)local_kernel_range, dims[0]);
+			u_int64_t y = std::min((uint64_t)local_kernel_range / x, dims[1]);
+			u_int64_t z = std::min((uint64_t)local_kernel_range / (y * x), dims[2]);
+			// std::cout << "optimal work item sizes\nx: " << x << "\ny: " << y << "\nz: " << z << "\n";
+			// std::cout << "global_kernel_range " << global_kernel_range << "\n";
+			
 			kernel.setArg(0, offset);
-			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(kernel_range), cl::NDRange(x,y,z));
-			queue.enqueueReadBuffer(b_workpack_result_low,  CL_TRUE, 0, sizeof(uint64_t), &tmp_low);
-			queue.enqueueReadBuffer(b_workpack_result_high, CL_TRUE, 0, sizeof(uint64_t), &tmp_high);
+			queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_kernel_range), cl::NDRange(x,y,z));
+			queue.enqueueReadBuffer(b_workpack_result_low,  CL_TRUE, 0, sizeof(uint64_t)*num_groups, tmp_low.data());
+			queue.enqueueReadBuffer(b_workpack_result_high, CL_TRUE, 0, sizeof(uint64_t)*num_groups, tmp_high.data());
 
-			offset += kernel_range;
-			kernel_range = std::min(end - offset + 1, (uint64_t) max_workgroup_size);
+			for(int j =0; j < num_groups; j++)
+			{
+				total += tmp_low[j];
+				uint128_t high = tmp_high[j];
+				total += (high << 64);
+			}
+			offset += global_kernel_range;
+			local_kernel_range = std::min(end - offset + 1, (uint64_t) max_workgroup_size);
+			global_kernel_range = std::min(end-offset+1,(uint64_t) max_global_size);
+			num_groups = global_kernel_range / local_kernel_range;
+			global_kernel_range =  local_kernel_range * num_groups;
+			
 
-			total += tmp_low;
-			uint128_t high = tmp_high;
-			total += (high << 64);
 		}
 
 		print_u128_u(total);
