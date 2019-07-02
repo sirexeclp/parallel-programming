@@ -1,0 +1,6 @@
+[submodule "assignment4/task4.1"]
+	path = assignment4/task4.1
+	url = git@gitlab.hpi.de:osm-teaching/parprog2019/task4.1.git
+[submodule "assignment4/task4.2"]
+	path = assignment4/task4.2
+	url = git@gitlab.hpi.de:osm-teaching/parprog2019/task4.2.git
