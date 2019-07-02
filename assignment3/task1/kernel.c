@@ -7,7 +7,7 @@ kernel void reduce(
 {
     int lid = get_local_id(0) + (get_local_id(1) * get_local_size(0)) + (get_local_size(0) * get_local_size(1) * get_local_id(2));
 
-    unsigned long global_id = get_global_id(0);
+    unsigned long global_id = get_global_id(0) + (get_global_id(1) * get_global_size(0));
 
     // input is 64bit so we can init the upper 8bytes with 0
     tmp_low[lid] = offset + global_id;
@@ -43,7 +43,7 @@ kernel void reduce(
 
     if (lid == 0)
     {
-        workpack_result_low[get_group_id(0)] = tmp_low[0];
-        workpack_result_high[get_group_id(0)] = tmp_high[0];
+        workpack_result_low[get_group_id(0)+get_group_id(1)*get_num_groups(0)] = tmp_low[0];
+        workpack_result_high[get_group_id(0)+get_group_id(1)*get_num_groups(0)] = tmp_high[0];
     }
 }
