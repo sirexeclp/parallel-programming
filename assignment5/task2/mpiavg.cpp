@@ -7,6 +7,11 @@
 #include <vector>
 #include <cmath>
 
+bool isIntegerRank(int rank, int numIntegerRanks)
+{
+    return rank < numIntegerRanks;
+}
+
 int main(int argc, char ** argv) {
     int worldRank, worldSize;
     std::vector<int> inputNumbersInt;
@@ -32,7 +37,7 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
-    int group = (worldRank < mpiInteger) ? 0 : 1;
+    int group = isIntegerRank(worldRank, mpiInteger) ? 0 : 1;
 
     MPI_Comm split;
     MPI_Comm_split(MPI_COMM_WORLD, group, worldRank, &split);
@@ -41,11 +46,10 @@ int main(int argc, char ** argv) {
     MPI_Comm_rank(split, &splitRank);
     MPI_Comm_size(split, &splitSize);
 
-    printf("WORLD RANK/SIZE: %d/%d \t SPLIT RANK/SIZE: %d/%d\n", worldRank, worldSize, splitRank, splitSize);
+    std::vector<int> displInt;
+    std::vector<int> displDouble;
 
-    std::vector<int> displs;
-
-    if (worldRank == 0)
+    if (splitRank == 0 && isIntegerRank(worldRank, mpiInteger))
     {
         std::ifstream file(filename);
         if (file.fail()) {
@@ -86,7 +90,7 @@ int main(int argc, char ** argv) {
         int count = numElements;
         int procs = splitSize;
 
-        while(count > 0)
+        while (count > 0)
         {
             int partSize = int(std::ceil(count / std::max(1.0f, float(procs))));
             partSizes.push_back(partSize);
@@ -94,85 +98,110 @@ int main(int argc, char ** argv) {
             count -= partSize;
         }
 
-        while(procs > 0)
+        while (procs > 0)
         {
             partSizes.push_back(0);
             procs -= 1;
         }
 
-        assert(partSizes.size() == mpiInteger);
-
         int sum = 0;
-        for (int i = 0; i < mpiInteger; i++) {
-            displs.push_back(sum);
-            sum += partSizes[i];
+
+        if (isIntegerRank(worldRank, mpiInteger))
+        {
+            for (int i = 0; i < mpiInteger; i++) {
+                displInt.push_back(sum);
+                sum += partSizes[i];
+            }
+        }
+        else
+        {
+            for (int i = 0; i < mpiDouble; i++) {
+                displDouble.push_back(sum);
+                sum += partSizes[i];
+            }
         }
     }
 
     int size = 0;
 
-    if (worldRank < mpiInteger)
-    {
-        MPI_Scatter(static_cast<void*>(partSizes.data()),
-                    1,          // size is only one integer
-                    MPI_INT,
-                    &size,
-                    1,          // receive one integer
-                    MPI_INT,
-                    0,          // root
-                    split);
-    }
+    // Send the number of the elements which will be send next
+    MPI_Scatter(static_cast<void*>(partSizes.data()),
+                1,          // size is only one integer
+                MPI_INT,
+                &size,
+                1,          // receive one integer
+                MPI_INT,
+                0,          // root
+                split);
 
-    int *rec_buf = new int[size];
-
-    if (worldRank < mpiInteger)
+    // Distribute the numbers to the ranks
+    if (isIntegerRank(worldRank, mpiInteger))
     {
+        int *rec_buf = new int[size];
+
         MPI_Scatterv(   static_cast<void*>(inputNumbersInt.data()),
                         static_cast<int*>(partSizes.data()),
-                        static_cast<int*>(displs.data()),
+                        static_cast<int*>(displInt.data()),
                         MPI_INT,
                         rec_buf,
                         size,
                         MPI_INT,
                         0,
                         split);
+
+        // Calculate local sum
+        int localSum = 0;
+
+        for (int i = 0; i < size; i++)
+        {
+            localSum += rec_buf[i];
+        }
+
+        // Calculate global sum and average
+        int globalSum = 0;
+
+        MPI_Reduce(&localSum, &globalSum, 1, MPI_INT, MPI_SUM, 0, split);
+
+        if (splitRank == 0)
+        {
+            auto average = globalSum / (float) numElements;
+            printf("int: %.6f\n", average);
+        }
     }
+    else
+    {
+        double *rec_buf = new double[size];
 
-    // if (worldRank < mpiInteger)
-    // {
-    //     for (auto num : inputNumbersInt)
-    //     {
-    //         std::cout << "[Before " << worldRank << " | " << splitRank << "]" << num << std::endl;
-    //     }
-    //     MPI_Barrier(split);
-    //     MPI_Bcast(static_cast<void*>(inputNumbersInt.data()), inputNumbersInt.size(), MPI_INT, 0, split);
-    //     MPI_Barrier(split);
-    //     for (auto num : inputNumbersInt)
-    //     {
-    //         std::cout << "[After " << worldRank << " | " << splitRank << "]" << num << std::endl;
-    //     }
-    // }
-    // else
-    // {
-    //     // for (auto num : inputNumbersDouble)
-    //     // {
-    //     //     std::cout << "[Before " << worldRank << " | " << splitRank << "]" << num << std::endl;
-    //     // }
-    //     // MPI_Bcast(static_cast<void*>(inputNumbersDouble.data()), inputNumbersDouble.size(), MPI_DOUBLE, 0, split);
-    //     // for (auto num : inputNumbersDouble)
-    //     // {
-    //     //     std::cout << "[After " << worldRank << " | " << splitRank << "]" << num << std::endl;
-    //     // }
-    // }
+        MPI_Scatterv(   static_cast<void*>(inputNumbersDouble.data()),
+                        static_cast<int*>(partSizes.data()),
+                        static_cast<int*>(displDouble.data()),
+                        MPI_DOUBLE,
+                        rec_buf,
+                        size,
+                        MPI_DOUBLE,
+                        0,
+                        split);
 
+        // Calculate local sum
+        double localSum = 0;
 
-    /**
-     * Next steps:
-     * 
-     * Broadcast/allocat numbers
-     * Use MPI-Reduce to do Reduction (Average) : https://mpitutorial.com/tutorials/mpi-reduce-and-allreduce/
-     * If master (rank 0): print result
-    */
+        for (int i = 0; i < size; i++)
+        {
+            localSum += rec_buf[i];
+        }
+
+        // Calculate global sum and average
+        double globalSum = 0;
+
+        MPI_Reduce(&localSum, &globalSum, 1, MPI_DOUBLE, MPI_SUM, 0, split);
+
+        if (splitRank == 0)
+        {
+            auto average = globalSum / (double) numElements;
+            printf("double: %.6f\n", average);
+        }
+    }
+    
 
     MPI_Barrier(split);
 
