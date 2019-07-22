@@ -18,6 +18,9 @@ int main(int argc, char ** argv) {
     std::vector<double> inputNumbersDouble;
     int numElements = 0;
 
+    double avgInt = 0;
+    double avgDouble = 0;
+
     if (argc < 4)
     {
         std::cerr << "Wrong number of arguments!" << std::endl;
@@ -84,6 +87,7 @@ int main(int argc, char ** argv) {
         numElements = inputNumbersDouble.size();
     }
 
+    // Calculate Distribution and displacements
     std::vector<int> partSizes;
     if (splitRank == 0)
     {
@@ -164,8 +168,7 @@ int main(int argc, char ** argv) {
 
         if (splitRank == 0)
         {
-            auto average = globalSum / (float) numElements;
-            printf("int: %.6f\n", average);
+            avgInt = globalSum / (double) numElements;;
         }
     }
     else
@@ -197,13 +200,26 @@ int main(int argc, char ** argv) {
 
         if (splitRank == 0)
         {
-            auto average = globalSum / (double) numElements;
-            printf("double: %.6f\n", average);
+            avgDouble = globalSum / (double) numElements;;
         }
     }
-    
 
-    MPI_Barrier(split);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    double *allAvgDoubles = NULL;
+    if (worldRank == 0)
+    {
+        allAvgDoubles = (double *)(malloc(sizeof(double) * worldSize));
+    }
+
+    // Misuse MPI_Gather to collect double average result
+    MPI_Gather(&avgDouble, 1, MPI_DOUBLE, allAvgDoubles, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    if (worldRank == 0)
+    {
+        printf("%.6f\n", avgInt);
+        printf("%.6f\n", allAvgDoubles[mpiInteger]);
+    }
 
     MPI_Comm_free(&split);
 
