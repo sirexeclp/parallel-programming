@@ -223,15 +223,27 @@ int main(int argc, char *argv[])
     //calculate threads/ranks to use
     int numThreads = std::min(height, world_size);
 
+    if(my_id >= numThreads)
+    {
+        MPI_Finalize();
+        return EXIT_SUCCESS;
+    }
+
     //calculate ranks of neighbors
     int above_nbr, below_nbr;
     above_nbr = (my_id - 1) % numThreads;
     below_nbr = (my_id + 1) % numThreads;
 
     //devide by chunks of rows
-    int workPerThread = std::ceil(height / (float)numThreads);
+    int workPerThread = height / numThreads;
     int startRow = my_id * workPerThread;
     int endRow = std::min((my_id + 1) * workPerThread, height) - 1;
+    if(my_id == (numThreads - 1))
+        endRow = height - 1;
+    MPI_Request reqSend[2];
+    MPI_Request reqRecv[2];
+    
+    // std::cout << height << " " << width << "\n";
 
     //main loop
     for (int round = 0; round < rounds; round++)
@@ -250,7 +262,7 @@ int main(int argc, char *argv[])
             update_row(map_aggregated, map_temp, i);
         }
 
-        //  std::cout << round << "/" << rounds  << "id" <<my_id << "\n";
+
         if (my_id == 0)
         {
             //recieve from below write to last row +1
@@ -288,6 +300,40 @@ int main(int argc, char *argv[])
             MPI_Send(&(map_temp->cells[width * endRow]), width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
 
+
+
+        // //  std::cout << round << "/" << rounds  << "id" <<my_id << "\n";
+        // if (my_id !=  (numThreads - 1) )
+        // {
+            
+
+        //     //send last row to below
+        //     MPI_Isend(&(map_temp->cells[width * endRow]), width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD, &reqSend[0]);
+
+        //     //recieve from below write to last row +1
+        //     MPI_Irecv(&(map_temp->cells[width * (endRow + 1)]),
+        //              width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD, &reqRecv[0]);
+        
+        // }
+        // if (my_id != 0)
+        // {
+
+        //     //send to above
+        //     MPI_Isend(&(map_temp->cells[width * startRow]), width, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &reqSend[1]);
+
+        //     //recieve from above
+        //     MPI_Irecv(&(map_temp->cells[width * (startRow - 1)]),
+        //              width, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &reqRecv[1]);
+        // }
+        // // MPI_Barrier(MPI_COMM_WORLD);
+
+        // if (my_id != 0)
+        //     MPI_Wait( &reqRecv[1],&status);
+
+        // if(my_id !=  (numThreads - 1) )
+        //     MPI_Wait( &reqRecv[0],&status);
+      
+
         // std::cout << round << "/" << rounds<< "\n";
 
         delete map_aggregated;
@@ -296,39 +342,52 @@ int main(int argc, char *argv[])
     }
     // std::cout << "done";
 
-    if (my_id == 0)
-    {
-        for (int i = 1; i < numThreads; i++)
-        {
-            startRow = i * workPerThread;
-            endRow = std::min((i + 1) * workPerThread, height) - 1;
+    // if (my_id == 0)
+    // {
+    //     MPI_Gather(MPI_IN_PLACE,  width * (endRow - startRow + 1), MPI_DOUBLE,
+    //             &map_aggregated->cells[width * startRow], width * (endRow - startRow + 1),MPI_DOUBLE,0 ,MPI_COMM_WORLD);
+    //     // MPI_Request reqs[numThreads];
+    //     // for (int i = 1; i < numThreads; i++)
+    //     // {
+    //     //     startRow = i * workPerThread;
+    //     //     endRow = std::min((i + 1) * workPerThread, height) - 1;
 
-            MPI_Recv(&map_aggregated->cells[width * startRow],
-                     width * (endRow - startRow + 1), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &status);
-        }
-        for (auto hotSpot : hotSpots)
-        {
-            if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
-            {
-                (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-            }
-        }
+    //     //     MPI_Irecv(&map_aggregated->cells[width * startRow],
+    //     //              width * (endRow - startRow + 1), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &reqs[i]);
+    //     // }
+    //     // for (int i = 1; i < numThreads; i++)
+    //     // {
+    //     //     MPI_Wait(&reqs[i], &status);
+    //     // }
+    //     // for (auto hotSpot : hotSpots)
+    //     // {
+    //     //     if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
+    //     //     {
+    //     //         (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
+    //     //     }
+    //     // }
 
-        if (argc == 6)
-        {
-            auto coordinateFile = argv[5];
-            map_aggregated->print(coordinateFile);
-        }
-        else
-        {
-            map_aggregated->print();
-        }
-    }
-    else
-    {
-
-        MPI_Send(&map_aggregated->cells[width * startRow], width * (endRow - startRow + 1), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-    }
+    //     // if (argc == 6)
+    //     // {
+    //     //     auto coordinateFile = argv[5];
+    //     //     map_aggregated->print(coordinateFile);
+    //     // }
+    //     // else
+    //     // {
+    //     //     map_aggregated->print();
+    //     // }
+    // }
+    // else
+    // {
+        CELL_T *gather = NULL;
+        if(my_id==0)
+            gather = (double *)(malloc(sizeof(double) * width*height));
+        
+       std::cout << endRow << " " <<  startRow << std::endl;
+        MPI_Gather(&map_aggregated->cells[width * startRow],  width * (endRow - startRow + 1), MPI_DOUBLE,
+        &gather, width * (endRow - startRow + 1),MPI_DOUBLE,0,MPI_COMM_WORLD );
+        // MPI_Send(&map_aggregated->cells[width * startRow], width * (endRow - startRow + 1), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+    // }
 
     delete map_aggregated;
     // //delete map_temp;
