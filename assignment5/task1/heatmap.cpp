@@ -101,6 +101,11 @@ struct Hotspot
     int start_round;
     int end_round;
 
+    Hotspot()
+    {
+
+    }
+
     Hotspot(int x, int y, int start, int end)
     {
         this->x = x;
@@ -166,22 +171,7 @@ std::vector<Hotspot> read_input(std::string file_name)
 
 int main(int argc, char* argv[])
 {
-    if (argc < 5)
-    {
-        printf("usage: ./heatmap width height rounds input-file [coordinates-file]");
-        return EXIT_FAILURE;
-    }
-
-    Map * map_aggregated = new Map(atoi(argv[1]), atoi(argv[2]));
     
-    int rounds = atoi(argv[3]);
-    char * input_file = argv[4];
-
-    
-    //read hotspots
-    auto hotSpots = read_input(input_file);
-
-
     // Initialize the MPI environment
     MPI_Init(NULL, NULL);
 
@@ -193,117 +183,168 @@ int main(int argc, char* argv[])
     int my_id;
     MPI_Comm_rank(MPI_COMM_WORLD, &my_id);
 
-
-    MPI_Request req;
-    MPI_Status  status;
-
-    int numThreads = std::min(map_aggregated->height,world_size);
-    
-    int left_nbr, right_nbr;
-    left_nbr = (my_id -1)%numThreads;
-    right_nbr = (my_id +1)%numThreads;
-    
-    Map * map_temp = new Map(atoi(argv[1]), atoi(argv[2]));
-    int workPerThread = std::ceil(map_aggregated->height / (float)numThreads);
-
-    for (int round = 0; round < rounds; round++)
+    std::vector<Hotspot> hotSpots;
+    int width, height, rounds;
+    int numHotspots;
+    char * input_file;
+    if(my_id == 0)
     {
-    
-        for (auto hotSpot: hotSpots)
+        if (argc < 5)
         {
-            if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
-            {
-                (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-            }
+            printf("usage: ./heatmap width height rounds input-file [coordinates-file]");
+            return EXIT_FAILURE;
         }
-        int i;
-        for(i = my_id * workPerThread; i < std::min((my_id +1)* workPerThread, map_aggregated->height );i++ )
-        {
-            update_row(map_aggregated, map_temp, i);
-        }
-       
-        
-        if (my_id==0)
-        {
-            //recieve from right
-            MPI_Recv(&map_temp->cells[map_temp->width*i % map_temp->height ],
-                map_aggregated->width, MPI_DOUBLE,right_nbr,2,MPI_COMM_WORLD ,&status);
-            
-            //send to right
-            MPI_Send(&(map_aggregated->cells[map_aggregated->width*i])
-            , map_aggregated->width, MPI_DOUBLE, right_nbr, 1, MPI_COMM_WORLD);
-        
-        }
-        else if (my_id == (numThreads-1))
-        {
-            //recieve from left
-            MPI_Recv(&map_temp->cells[map_temp->width*((my_id * workPerThread)-1) % map_temp->height ],
-                map_aggregated->width, MPI_DOUBLE,left_nbr,1,MPI_COMM_WORLD ,&status);
-
-            //send to left
-            MPI_Send(&(map_aggregated->cells[map_aggregated->width*my_id * workPerThread])
-            , map_aggregated->width, MPI_DOUBLE, left_nbr, 2, MPI_COMM_WORLD);
-
-        }
-        else
-        {
-
-            //send to left
-            MPI_Send(&(map_aggregated->cells[map_aggregated->width*my_id * workPerThread])
-            , map_aggregated->width, MPI_DOUBLE, left_nbr, 2, MPI_COMM_WORLD);
-
-            //recieve from left
-            MPI_Recv(&map_temp->cells[map_temp->width*((my_id * workPerThread)-1) % map_temp->height ],
-                map_aggregated->width, MPI_DOUBLE,left_nbr,1,MPI_COMM_WORLD ,&status);
-            
-            //send to right
-            MPI_Send(&(map_aggregated->cells[map_aggregated->width*i])
-            , map_aggregated->width, MPI_DOUBLE, right_nbr, 1, MPI_COMM_WORLD);
-
-            //revieve from right
-            MPI_Recv(&map_temp->cells[map_temp->width*i % map_temp->height ],
-                map_aggregated->width, MPI_DOUBLE,right_nbr,2,MPI_COMM_WORLD ,&status);
-
-        }
-        
-         std::cout << round << "/" << rounds<< "\n";
-
-        std::swap(map_aggregated,map_temp );    
-      
+        width =   atoi(argv[1]);
+        height =  atoi(argv[2]);
+        rounds = atoi(argv[3]);
+        input_file = argv[4];        
+        //read hotspots
+        hotSpots = read_input(input_file);
+        numHotspots = hotSpots.size();
     }
-    std::cout << "ok";
+
+    MPI_Bcast(&width,1,MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&height,1,MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&rounds,1,MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&numHotspots,1,MPI_INT, 0, MPI_COMM_WORLD);
+
+    if(my_id != 0)
+        hotSpots = std::vector<Hotspot>(numHotspots);
+
+    MPI_Bcast(&hotSpots[0],sizeof(Hotspot)* numHotspots,MPI_INT, 0, MPI_COMM_WORLD);
+
+
+    Map * map_aggregated = new Map(width, height);
+
 
     for (auto hotSpot: hotSpots)
     {
-        if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
-        {
-            (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-        }
+        std::cout << my_id << " x:" <<  hotSpot.x<< " y:" << hotSpot.y <<"\n";  
     }
-    if(my_id!=0)
-    {
-        MPI_Send(&map_temp->cells[map_temp->width*my_id ]
-            , map_temp->width, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-    }
-    else{
-         MPI_Recv(&map_temp->cells[map_temp->width*my_id ],
-             map_temp->width, MPI_DOUBLE,0,0,MPI_COMM_WORLD ,&status);
 
-    }
-      MPI_Finalize();
 
-    if (argc == 6)
-    {
-        auto coordinateFile = argv[5];
-        map_aggregated->print(coordinateFile);
-    }
-    else
-    {
-        map_aggregated->print();
-    }
+
+
+    // MPI_Request req;
+    // MPI_Status  status;
+
+    // int numThreads = std::min(map_aggregated->height,world_size);
     
-    delete map_aggregated;
-    delete map_temp;
+    // int above_nbr, below_nbr;
+    // above_nbr = (my_id -1)%numThreads;
+    // below_nbr = (my_id +1)%numThreads;
+    
+  
+    // int workPerThread = std::ceil(map_aggregated->height / (float)numThreads);
+    // int startRow = my_id * workPerThread;
+    // int endRow = std::min((my_id +1)* workPerThread, map_aggregated->height);
+    
+    // for (int round = 0; round < 1; round++)
+    // {
+    //     Map * map_temp = new Map(width, height);
+    //     for (auto hotSpot: hotSpots)
+    //     {
+    //         if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
+    //         {
+    //             (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
+    //         }
+    //     }
+    //     int i;
+    //     for(i = startRow; i < endRow; i++ )
+    //     {
+    //         update_row(map_aggregated, map_temp, i);
+    //     }
+       
+    //      std::cout << round << "/" << rounds  << "id" <<my_id << "\n";
+    //     if (my_id==0)
+    //     {
+    //         //recieve from below write to last row +1 
+    //         MPI_Recv(&(map_temp->cells[map_temp->width*(endRow+1) ]),
+    //             map_temp->width, MPI_DOUBLE,below_nbr,2,MPI_COMM_WORLD ,&status);
+            
+    //         //send last row to below
+    //         MPI_Send(&(map_temp->cells[map_temp->width*endRow])
+    //         , map_temp->width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
+        
+    //     }
+    //     else if (my_id == (numThreads-1))
+    //     {
+            
+    //           //send to above
+    //         MPI_Send(&(map_temp->cells[map_temp->width*(startRow)])
+    //         , map_temp->width, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
+            
+            
+    //         //recieve from above
+    //         MPI_Recv(&(map_temp->cells[map_temp->width * (startRow -1) ]),
+    //             map_temp->width, MPI_DOUBLE,above_nbr,1,MPI_COMM_WORLD ,&status);
 
+            
+    //     }
+    //     else
+    //     {
+
+    //         //send to above
+    //         MPI_Send(&(map_temp->cells[map_temp->width*(startRow)])
+    //         , map_temp->width, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
+            
+    //         //recieve from below write to last row +1 
+    //         MPI_Recv(&(map_temp->cells[map_temp->width*(endRow+1) ]),
+    //             map_temp->width, MPI_DOUBLE,below_nbr,2,MPI_COMM_WORLD ,&status);
+
+    //         //recieve from above
+    //         MPI_Recv(&(map_temp->cells[map_temp->width * (startRow -1) ]),
+    //             map_temp->width, MPI_DOUBLE,above_nbr,1,MPI_COMM_WORLD ,&status);
+            
+    //         //send last row to below
+    //         MPI_Send(&(map_temp->cells[map_temp->width*endRow])
+    //         , map_temp->width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
+
+            
+
+    //     }
+        
+    //     // std::cout << round << "/" << rounds<< "\n";
+
+
+    //     //delete map_aggregated;
+    //     map_aggregated = map_temp;
+    //     // std::swap(map_aggregated,map_temp );    
+    // }
+    // std::cout << "done";
+
+    // for (auto hotSpot: hotSpots)
+    // {
+    //     if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
+    //     {
+    //         (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
+    //     }
+    // }
+    // if(my_id!=0)
+    // {
+    //     MPI_Send(&map_aggregated->cells[map_aggregated->width*my_id ]
+    //         , map_aggregated->width, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+    // }
+    // else{
+    //      MPI_Recv(&map_aggregated->cells[map_aggregated->width*my_id ],
+    //          map_aggregated->width, MPI_DOUBLE,0,0,MPI_COMM_WORLD ,&status);
+
+    // }
+  
+
+    // if (argc == 6)
+    // {
+    //     auto coordinateFile = argv[5];
+    //     map_aggregated->print(coordinateFile);
+    // }
+    // else
+    // {
+    //     map_aggregated->print();
+    // }
+    
+    // delete map_aggregated;
+    // //delete map_temp;
+    
+    MPI_Finalize();
     return EXIT_SUCCESS;
  }
