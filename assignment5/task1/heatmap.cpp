@@ -259,6 +259,12 @@ int main(int argc, char *argv[])
     //calculate threads/ranks to use
     int numThreads = std::min(width, world_size);
 
+    if(my_id >= numThreads)
+    {
+        MPI_Finalize();
+        return EXIT_SUCCESS;
+    }
+
     //calculate ranks of neighbors
     int above_nbr, below_nbr;
     above_nbr = (my_id - 1) % numThreads;
