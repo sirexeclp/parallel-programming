@@ -243,34 +243,20 @@ int main(int argc, char *argv[])
         numHotspots = hotSpots.size();
     }
 
-    
-    
-    // MPI_Bcast(&width, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    // MPI_Bcast(&height, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    // MPI_Bcast(&rounds, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    //broadcast size of hotSpots vector
     MPI_Bcast(&numHotspots, 1, MPI_INT, 0, MPI_COMM_WORLD);
     
-    // std::cout << "id:" << my_id << " width: "<< width << " height: " << height
-    // << " rounds: "<< rounds << "numHotspots: " << numHotspots <<
-    // std::endl; 
-    
+    //resize hotSpots vector
     if (my_id != 0)
-        hotSpots = std::vector<Hotspot>(numHotspots);
+        hotSpots.resize(numHotspots);
 
-    // MPI_Barrier(MPI_COMM_WORLD);
-    std::cout << "id:" << my_id << "size: " << sizeof(Hotspot) * numHotspots   << std::endl;
+    //broadcast hotSpots vector
     MPI_Bcast(hotSpots.data(), (sizeof(Hotspot)/sizeof(int)) * hotSpots.size(), MPI_INT, 0, MPI_COMM_WORLD);
 
     Map *map_aggregated = new Map(width, height);
-
-    // for (auto hotSpot: hotSpots)
-    // {
-    //     std::cout << my_id << " x:" <<  hotSpot.x<< " y:" << hotSpot.y <<"\n";
-    // }
+    Map *map_temp = new Map(width, height);
 
     //calculate threads/ranks to use
-    
-    
     int numThreads = std::min(width, world_size);
 
     //calculate ranks of neighbors
@@ -278,79 +264,73 @@ int main(int argc, char *argv[])
     above_nbr = (my_id - 1) % numThreads;
     below_nbr = (my_id + 1) % numThreads;
 
-    //devide by chunks of rows
+    //devide by chunks of columns
     int workPerThread = width / numThreads;
     int startCol = my_id * workPerThread;
     int endCol = std::min((my_id + 1) * workPerThread, width) - 1;
+    //last rank has do to a little bit more work
     if(my_id == (numThreads-1))
     {
         endCol = width-1;
     }
-      std::cout << "id:" << my_id << " numThreads: "<< numThreads << " workPerThread: " << workPerThread
-     << " start: "<< startCol << "end: " << endCol <<
-     std::endl; 
-    
-    
-    
+
     int round = 0;
     //main loop
     for (round = 0; round < rounds; round++)
     {
-        Map *map_temp = new Map(width, height);
+        //set hotspots for this round
         map_aggregated->setHotspots(hotSpots, round);
-        int i;
-        for (i = startCol; i <= endCol; i++)
+        
+        //calculate updates on chunk of columns
+        for (int i = startCol; i <= endCol; i++)
         {
             update_column(map_aggregated, map_temp, i);
         }
 
-        //  std::cout << round << "/" << rounds  << "id" <<my_id << "\n";
+
+        //first rank communicates only with ranks on the right side
         if (my_id == 0)
         {
-            //recieve from below write to last row +1
-           // MPI_Recv(&map_temp->((endRow + 1)),
+            //recieve from right write to last col +1
             MPI_Recv(map_temp -> column(endCol + 1),
                      height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
-            //send last row to below
+            //send last col to right
             MPI_Bsend(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
+        //last rank communicates only with ranks on the left side
         else if (my_id == (numThreads - 1))
         {
 
-            //send to above
+            //send to left
             MPI_Bsend(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
-            //recieve from above
+            //recieve from left
             MPI_Recv(map_temp->column(startCol - 1),
                      height, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
         }
         else
         {
 
-            //send to above
+            //send to left
             MPI_Bsend(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
-            //recieve from below write to last row +1
+            //recieve from right write to last col +1
             MPI_Recv(map_temp -> column(endCol + 1),
                      height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
-            //recieve from above
+            //recieve from left
             MPI_Recv(map_temp->column(startCol - 1),
                      height, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
 
-            //send last row to below
+            //send last row to right
             MPI_Bsend(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
 
-        // std::cout << round << "/" << rounds<< "\n";
-
-        delete map_aggregated;
-        map_aggregated = map_temp;
-        // std::swap(map_aggregated,map_temp );
+        std::swap(map_aggregated,map_temp );
     }
-    // std::cout << "done";
 
+    //could probably use gather here
     if (my_id == 0)
     {
         for (int i = 1; i < numThreads; i++)
