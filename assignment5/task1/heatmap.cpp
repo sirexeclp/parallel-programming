@@ -13,6 +13,24 @@
 #define OUTPUT_NAME "output.txt"
 #define CELL_T double
 
+struct Hotspot
+{
+    int x;
+    int y;
+    int start_round;
+    int end_round;
+
+    Hotspot(){}
+
+    Hotspot(int x, int y, int start, int end)
+    {
+        this->x = x;
+        this->y = y;
+        this->start_round = start;
+        this->end_round = end;
+    }
+};
+
 class Map
 {
 public:
@@ -52,6 +70,18 @@ public:
     {
         delete cells;
     }
+    
+    CELL_T &operator()(int x, int y) {
+         return cells[y * width + x];
+    }
+    
+    CELL_T &operator()(int row){
+        return cells[row*width];
+    }
+
+    CELL_T &operator[](int row){
+        return cells[row*width];
+    }
 
     void print()
     {
@@ -76,6 +106,18 @@ public:
         }
     }
 
+    void setHotspots(std::vector<Hotspot> hotSpots, int round)
+    {
+        for (auto hotSpot : hotSpots)
+        {
+            if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
+            {
+                if((hotSpot.y < height) && (hotSpot.x < width))
+                    cells[hotSpot.y * width + hotSpot.x] = 1;
+            }
+        }
+    }
+
     void print(std::string coordinateFile)
     {
         std::ifstream file(coordinateFile);
@@ -96,25 +138,7 @@ public:
     }
 };
 
-struct Hotspot
-{
-    int x;
-    int y;
-    int start_round;
-    int end_round;
 
-    Hotspot()
-    {
-    }
-
-    Hotspot(int x, int y, int start, int end)
-    {
-        this->x = x;
-        this->y = y;
-        this->start_round = start;
-        this->end_round = end;
-    }
-};
 
 struct WorkPack
 {
@@ -232,18 +256,12 @@ int main(int argc, char *argv[])
     int workPerThread = std::ceil(height / (float)numThreads);
     int startRow = my_id * workPerThread;
     int endRow = std::min((my_id + 1) * workPerThread, height) - 1;
-
+    int round = 0;
     //main loop
-    for (int round = 0; round < rounds; round++)
+    for (round = 0; round < rounds; round++)
     {
         Map *map_temp = new Map(width, height);
-        for (auto hotSpot : hotSpots)
-        {
-            if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
-            {
-                (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-            }
-        }
+        map_aggregated->setHotspots(hotSpots, round);
         int i;
         for (i = startRow; i <= endRow; i++)
         {
@@ -254,7 +272,8 @@ int main(int argc, char *argv[])
         if (my_id == 0)
         {
             //recieve from below write to last row +1
-            MPI_Recv(&(map_temp->cells[width * (endRow + 1)]),
+           // MPI_Recv(&map_temp->((endRow + 1)),
+                    MPI_Recv(&(*map_temp)[endRow + 1],
                      width, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
             //send last row to below
@@ -306,13 +325,7 @@ int main(int argc, char *argv[])
             MPI_Recv(&map_aggregated->cells[width * startRow],
                      width * (endRow - startRow + 1), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &status);
         }
-        for (auto hotSpot : hotSpots)
-        {
-            if ((rounds >= hotSpot.start_round) && (rounds < hotSpot.end_round))
-            {
-                (map_aggregated->cells)[hotSpot.y * map_aggregated->width + hotSpot.x] = 1;
-            }
-        }
+        map_aggregated->setHotspots(hotSpots, round);
 
         if (argc == 6)
         {
