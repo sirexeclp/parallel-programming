@@ -20,7 +20,7 @@ struct Hotspot
     int start_round;
     int end_round;
 
-    Hotspot(){}
+    Hotspot() {}
 
     Hotspot(int x, int y, int start, int end)
     {
@@ -44,12 +44,12 @@ public:
         this->width = width;
         this->cells = new CELL_T[height * width];
 
-for (int i = 0; i < width; i++)
-            {
-        for (int j = 0; j < height; j++)
+        for (int i = 0; i < width; i++)
         {
-            
-                cell(i,j) = 0;
+            for (int j = 0; j < height; j++)
+            {
+
+                cell(i, j) = 0;
             }
         }
     }
@@ -58,12 +58,12 @@ for (int i = 0; i < width; i++)
         this->height = old.height;
         this->width = old.width;
         this->cells = new CELL_T[height * width];
-         for (int i = 0; i < width; i++)
-            {
-        for (int j = 0; j < height; j++)
+        for (int i = 0; i < width; i++)
         {
-          
-                cell(i,j) = old.cells[j + height* i];
+            for (int j = 0; j < height; j++)
+            {
+
+                cell(i, j) = old.cells[j + height * i];
             }
         }
     }
@@ -72,17 +72,19 @@ for (int i = 0; i < width; i++)
     {
         delete cells;
     }
-    CELL_T &cell(int x, int y){
-        return cells[y + height* x];
+    CELL_T &cell(int x, int y)
+    {
+        return cells[y + height * x];
     }
-    
+
     // const CELL_T const operator()(int x, int y) {
     //      return cell(x,y);
     // }
-    
-    CELL_T* column(int x){
 
-        return &cells[x*height];
+    CELL_T *column(int x)
+    {
+
+        return &cells[x * height];
     }
 
     void print()
@@ -92,7 +94,7 @@ for (int i = 0; i < width; i++)
         {
             for (int i = 0; i < width; i++)
             {
-                auto value = cell(i,j);
+                auto value = cell(i, j);
                 if (value > .9)
                 {
                     output << "X";
@@ -114,8 +116,8 @@ for (int i = 0; i < width; i++)
         {
             if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
             {
-                if((hotSpot.y < height) && (hotSpot.x < width))
-                    cell(hotSpot.x,hotSpot.y) = 1;
+                if ((hotSpot.y < height) && (hotSpot.x < width))
+                    cell(hotSpot.x, hotSpot.y) = 1;
             }
         }
     }
@@ -135,12 +137,10 @@ for (int i = 0; i < width; i++)
             int x, y;
             std::stringstream lineStream(line);
             lineStream >> x >> y;
-            output << cell(x,y) << std::endl;
+            output << cell(x, y) << std::endl;
         }
     }
 };
-
-
 
 struct WorkPack
 {
@@ -157,11 +157,11 @@ void update_cell(Map *map_aggregated, Map *map_temp, int x, int y)
     {
         for (int j = std::max(y - 1, 0); j < std::min(y + 2, map_aggregated->height); j++)
         {
-            acc += map_aggregated->cell(i,j);
+            acc += map_aggregated->cell(i, j);
         }
     }
 
-    map_temp->cell(x ,y) = acc / 9.;
+    map_temp->cell(x, y) = acc / 9.;
 }
 
 // void update_row(Map *map_aggregated, Map *map_temp, int y)
@@ -219,22 +219,22 @@ int main(int argc, char *argv[])
 
     if (argc < 5)
     {
-        if(my_id == 0 )
+        if (my_id == 0)
             std::cout << "usage: ./heatmap width height rounds input-file [coordinates-file]" << std::endl;
 
         MPI_Finalize();
         return EXIT_FAILURE;
     }
-    
+
     std::vector<Hotspot> hotSpots;
     int width, height, rounds;
     int numHotspots;
     char *input_file;
-    
+
     width = atoi(argv[1]);
     height = atoi(argv[2]);
     rounds = atoi(argv[3]);
-    
+
     if (my_id == 0)
     {
         input_file = argv[4];
@@ -245,13 +245,13 @@ int main(int argc, char *argv[])
 
     //broadcast size of hotSpots vector
     MPI_Bcast(&numHotspots, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    
+
     //resize hotSpots vector
     if (my_id != 0)
         hotSpots.resize(numHotspots);
 
     //broadcast hotSpots vector
-    MPI_Bcast(hotSpots.data(), (sizeof(Hotspot)/sizeof(int)) * hotSpots.size(), MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(hotSpots.data(), (sizeof(Hotspot) / sizeof(int)) * hotSpots.size(), MPI_INT, 0, MPI_COMM_WORLD);
 
     Map *map_aggregated = new Map(width, height);
     Map *map_temp = new Map(width, height);
@@ -269,9 +269,9 @@ int main(int argc, char *argv[])
     int startCol = my_id * workPerThread;
     int endCol = std::min((my_id + 1) * workPerThread, width) - 1;
     //last rank has do to a little bit more work
-    if(my_id == (numThreads-1))
+    if (my_id == (numThreads - 1))
     {
-        endCol = width-1;
+        endCol = width - 1;
     }
 
     int round = 0;
@@ -280,19 +280,18 @@ int main(int argc, char *argv[])
     {
         //set hotspots for this round
         map_aggregated->setHotspots(hotSpots, round);
-        
+
         //calculate updates on chunk of columns
         for (int i = startCol; i <= endCol; i++)
         {
             update_column(map_aggregated, map_temp, i);
         }
 
-
         //first rank communicates only with ranks on the right side
         if (my_id == 0)
         {
             //recieve from right write to last col +1
-            MPI_Recv(map_temp -> column(endCol + 1),
+            MPI_Recv(map_temp->column(endCol + 1),
                      height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
             //send last col to right
@@ -316,7 +315,7 @@ int main(int argc, char *argv[])
             MPI_Bsend(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
             //recieve from right write to last col +1
-            MPI_Recv(map_temp -> column(endCol + 1),
+            MPI_Recv(map_temp->column(endCol + 1),
                      height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
             //recieve from left
@@ -327,7 +326,7 @@ int main(int argc, char *argv[])
             MPI_Bsend(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
 
-        std::swap(map_aggregated,map_temp );
+        std::swap(map_aggregated, map_temp);
     }
 
     //could probably use gather here
@@ -336,17 +335,19 @@ int main(int argc, char *argv[])
         for (int i = 1; i < numThreads; i++)
         {
             startCol = i * workPerThread;
-            endCol  = std::min((i + 1) * workPerThread, width) - 1;
-             if(i == (numThreads-1))
+            endCol = std::min((i + 1) * workPerThread, width) - 1;
+            if (i == (numThreads - 1))
             {
-                endCol = width-1;
+                endCol = width - 1;
             }
 
             MPI_Recv(map_aggregated->column(startCol),
                      height * (endCol - startCol + 1), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &status);
         }
+        //set hotspots one more time
         map_aggregated->setHotspots(hotSpots, round);
 
+        //write output to file
         if (argc == 6)
         {
             auto coordinateFile = argv[5];
@@ -359,12 +360,12 @@ int main(int argc, char *argv[])
     }
     else
     {
-
-        MPI_Send(map_aggregated->column( startCol), height * (endCol - startCol + 1), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        //send data to root
+        MPI_Send(map_aggregated->column(startCol), height * (endCol - startCol + 1), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
     }
 
     delete map_aggregated;
-    // //delete map_temp;
+    delete map_temp;
 
     MPI_Finalize();
     return EXIT_SUCCESS;
