@@ -44,11 +44,12 @@ public:
         this->width = width;
         this->cells = new CELL_T[height * width];
 
+for (int i = 0; i < width; i++)
+            {
         for (int j = 0; j < height; j++)
         {
-            for (int i = 0; i < width; i++)
-            {
-                cells[j * width + i] = 0;
+            
+                cell(i,j) = 0;
             }
         }
     }
@@ -57,11 +58,12 @@ public:
         this->height = old.height;
         this->width = old.width;
         this->cells = new CELL_T[height * width];
+         for (int i = 0; i < width; i++)
+            {
         for (int j = 0; j < height; j++)
         {
-            for (int i = 0; i < width; i++)
-            {
-                cells[j * width + i] = old.cells[j * width + i];
+          
+                cell(i,j) = old.cells[j + height* i];
             }
         }
     }
@@ -70,17 +72,17 @@ public:
     {
         delete cells;
     }
-    
-    CELL_T &operator()(int x, int y) {
-         return cells[y * width + x];
+    CELL_T &cell(int x, int y){
+        return cells[y + height* x];
     }
     
-    CELL_T &operator()(int row){
-        return cells[row*width];
-    }
+    // const CELL_T const operator()(int x, int y) {
+    //      return cell(x,y);
+    // }
+    
+    CELL_T* column(int x){
 
-    CELL_T &operator[](int row){
-        return cells[row*width];
+        return &cells[x*height];
     }
 
     void print()
@@ -90,7 +92,7 @@ public:
         {
             for (int i = 0; i < width; i++)
             {
-                auto value = cells[j * width + i];
+                auto value = cell(i,j);
                 if (value > .9)
                 {
                     output << "X";
@@ -113,7 +115,7 @@ public:
             if ((round >= hotSpot.start_round) && (round < hotSpot.end_round))
             {
                 if((hotSpot.y < height) && (hotSpot.x < width))
-                    cells[hotSpot.y * width + hotSpot.x] = 1;
+                    cell(hotSpot.x,hotSpot.y) = 1;
             }
         }
     }
@@ -133,7 +135,7 @@ public:
             int x, y;
             std::stringstream lineStream(line);
             lineStream >> x >> y;
-            output << cells[x + y * width] << std::endl;
+            output << cell(x,y) << std::endl;
         }
     }
 };
@@ -155,16 +157,24 @@ void update_cell(Map *map_aggregated, Map *map_temp, int x, int y)
     {
         for (int j = std::max(y - 1, 0); j < std::min(y + 2, map_aggregated->height); j++)
         {
-            acc += (map_aggregated->cells)[j * offset + i];
+            acc += map_aggregated->cell(i,j);
         }
     }
 
-    (map_temp->cells)[x + y * offset] = acc / 9.;
+    map_temp->cell(x ,y) = acc / 9.;
 }
 
-void update_row(Map *map_aggregated, Map *map_temp, int y)
+// void update_row(Map *map_aggregated, Map *map_temp, int y)
+// {
+//     for (int x = 0; x < map_aggregated->width; x++)
+//     {
+//         update_cell(map_aggregated, map_temp, x, y);
+//     }
+// }
+
+void update_column(Map *map_aggregated, Map *map_temp, int x)
 {
-    for (int x = 0; x < map_aggregated->width; x++)
+    for (int y = 0; y < map_aggregated->height; y++)
     {
         update_cell(map_aggregated, map_temp, x, y);
     }
@@ -245,7 +255,7 @@ int main(int argc, char *argv[])
     // }
 
     //calculate threads/ranks to use
-    int numThreads = std::min(height, world_size);
+    int numThreads = std::min(width, world_size);
 
     //calculate ranks of neighbors
     int above_nbr, below_nbr;
@@ -253,9 +263,13 @@ int main(int argc, char *argv[])
     below_nbr = (my_id + 1) % numThreads;
 
     //devide by chunks of rows
-    int workPerThread = std::ceil(height / (float)numThreads);
-    int startRow = my_id * workPerThread;
-    int endRow = std::min((my_id + 1) * workPerThread, height) - 1;
+    int workPerThread = width / numThreads;
+    int startCol = my_id * workPerThread;
+    int endCol = std::min((my_id + 1) * workPerThread, width) - 1;
+    if(my_id == (numThreads-1))
+    {
+        endCol = width-1;
+    }
     int round = 0;
     //main loop
     for (round = 0; round < rounds; round++)
@@ -263,9 +277,9 @@ int main(int argc, char *argv[])
         Map *map_temp = new Map(width, height);
         map_aggregated->setHotspots(hotSpots, round);
         int i;
-        for (i = startRow; i <= endRow; i++)
+        for (i = startCol; i <= endCol; i++)
         {
-            update_row(map_aggregated, map_temp, i);
+            update_column(map_aggregated, map_temp, i);
         }
 
         //  std::cout << round << "/" << rounds  << "id" <<my_id << "\n";
@@ -273,38 +287,38 @@ int main(int argc, char *argv[])
         {
             //recieve from below write to last row +1
            // MPI_Recv(&map_temp->((endRow + 1)),
-                    MPI_Recv(&(*map_temp)[endRow + 1],
-                     width, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
+            MPI_Recv(map_temp -> column(endCol + 1),
+                     height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
             //send last row to below
-            MPI_Send(&(map_temp->cells[width * endRow]), width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
+            MPI_Send(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
         else if (my_id == (numThreads - 1))
         {
 
             //send to above
-            MPI_Send(&(map_temp->cells[width * startRow]), width, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
+            MPI_Send(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
             //recieve from above
-            MPI_Recv(&(map_temp->cells[width * (startRow - 1)]),
-                     width, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
+            MPI_Recv(map_temp->column(startCol - 1),
+                     height, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
         }
         else
         {
 
             //send to above
-            MPI_Send(&(map_temp->cells[width * startRow]), width, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
+            MPI_Send(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
             //recieve from below write to last row +1
-            MPI_Recv(&(map_temp->cells[width * (endRow + 1)]),
-                     width, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
+            MPI_Recv(map_temp -> column(endCol + 1),
+                     height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
             //recieve from above
-            MPI_Recv(&(map_temp->cells[width * (startRow - 1)]),
-                     width, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
+            MPI_Recv(map_temp->column(startCol - 1),
+                     height, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
 
             //send last row to below
-            MPI_Send(&(map_temp->cells[width * endRow]), width, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
+            MPI_Send(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
 
         // std::cout << round << "/" << rounds<< "\n";
@@ -319,11 +333,15 @@ int main(int argc, char *argv[])
     {
         for (int i = 1; i < numThreads; i++)
         {
-            startRow = i * workPerThread;
-            endRow = std::min((i + 1) * workPerThread, height) - 1;
+            startCol = i * workPerThread;
+            endCol  = std::min((i + 1) * workPerThread, width) - 1;
+             if(i == (numThreads-1))
+            {
+                endCol = width-1;
+            }
 
-            MPI_Recv(&map_aggregated->cells[width * startRow],
-                     width * (endRow - startRow + 1), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &status);
+            MPI_Recv(map_aggregated->column(startCol),
+                     height * (endCol - startCol + 1), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &status);
         }
         map_aggregated->setHotspots(hotSpots, round);
 
@@ -340,7 +358,7 @@ int main(int argc, char *argv[])
     else
     {
 
-        MPI_Send(&map_aggregated->cells[width * startRow], width * (endRow - startRow + 1), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(map_aggregated->column( startCol), height * (endCol - startCol + 1), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
     }
 
     delete map_aggregated;
