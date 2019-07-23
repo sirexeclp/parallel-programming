@@ -205,9 +205,9 @@ int main(int argc, char *argv[])
 {
 
     // Initialize the MPI environment
+    MPI_Init(&argc, &argv);
     MPI_Request req;
     MPI_Status status;
-    MPI_Init(NULL, NULL);
 
     // Get the number of processes
     int world_size;
@@ -217,35 +217,49 @@ int main(int argc, char *argv[])
     int my_id;
     MPI_Comm_rank(MPI_COMM_WORLD, &my_id);
 
+    if (argc < 5)
+    {
+        if(my_id == 0 )
+            std::cout << "usage: ./heatmap width height rounds input-file [coordinates-file]" << std::endl;
+
+        MPI_Finalize();
+        return EXIT_FAILURE;
+    }
+    
     std::vector<Hotspot> hotSpots;
     int width, height, rounds;
     int numHotspots;
     char *input_file;
+    
+    width = atoi(argv[1]);
+    height = atoi(argv[2]);
+    rounds = atoi(argv[3]);
+    
     if (my_id == 0)
     {
-        if (argc < 5)
-        {
-            printf("usage: ./heatmap width height rounds input-file [coordinates-file]");
-            return EXIT_FAILURE;
-        }
-        width = atoi(argv[1]);
-        height = atoi(argv[2]);
-        rounds = atoi(argv[3]);
         input_file = argv[4];
         //read hotspots
         hotSpots = read_input(input_file);
         numHotspots = hotSpots.size();
     }
 
-    MPI_Bcast(&width, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&height, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&rounds, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    
+    
+    // MPI_Bcast(&width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    // MPI_Bcast(&height, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    // MPI_Bcast(&rounds, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&numHotspots, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
+    
+    // std::cout << "id:" << my_id << " width: "<< width << " height: " << height
+    // << " rounds: "<< rounds << "numHotspots: " << numHotspots <<
+    // std::endl; 
+    
     if (my_id != 0)
         hotSpots = std::vector<Hotspot>(numHotspots);
 
-    MPI_Bcast(&hotSpots[0], sizeof(Hotspot) * numHotspots, MPI_INT, 0, MPI_COMM_WORLD);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    std::cout << "id:" << my_id << "size: " << sizeof(Hotspot) * numHotspots   << std::endl;
+    MPI_Bcast(hotSpots.data(), (sizeof(Hotspot)/sizeof(int)) * hotSpots.size(), MPI_INT, 0, MPI_COMM_WORLD);
 
     Map *map_aggregated = new Map(width, height);
 
@@ -255,6 +269,8 @@ int main(int argc, char *argv[])
     // }
 
     //calculate threads/ranks to use
+    
+    
     int numThreads = std::min(width, world_size);
 
     //calculate ranks of neighbors
@@ -270,6 +286,12 @@ int main(int argc, char *argv[])
     {
         endCol = width-1;
     }
+      std::cout << "id:" << my_id << " numThreads: "<< numThreads << " workPerThread: " << workPerThread
+     << " start: "<< startCol << "end: " << endCol <<
+     std::endl; 
+    
+    
+    
     int round = 0;
     //main loop
     for (round = 0; round < rounds; round++)
@@ -291,13 +313,13 @@ int main(int argc, char *argv[])
                      height, MPI_DOUBLE, below_nbr, 2, MPI_COMM_WORLD, &status);
 
             //send last row to below
-            MPI_Send(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
+            MPI_Bsend(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
         else if (my_id == (numThreads - 1))
         {
 
             //send to above
-            MPI_Send(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
+            MPI_Bsend(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
             //recieve from above
             MPI_Recv(map_temp->column(startCol - 1),
@@ -307,7 +329,7 @@ int main(int argc, char *argv[])
         {
 
             //send to above
-            MPI_Send(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
+            MPI_Bsend(map_temp->column(startCol), height, MPI_DOUBLE, above_nbr, 2, MPI_COMM_WORLD);
 
             //recieve from below write to last row +1
             MPI_Recv(map_temp -> column(endCol + 1),
@@ -318,7 +340,7 @@ int main(int argc, char *argv[])
                      height, MPI_DOUBLE, above_nbr, 1, MPI_COMM_WORLD, &status);
 
             //send last row to below
-            MPI_Send(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
+            MPI_Bsend(map_temp->column(endCol), height, MPI_DOUBLE, below_nbr, 1, MPI_COMM_WORLD);
         }
 
         // std::cout << round << "/" << rounds<< "\n";
